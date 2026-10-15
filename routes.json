@@ -1,0 +1,852 @@
+{
+  "app": "PESU Placements",
+  "package": "placementapp.com",
+  "source": "Reconstructed from the app's Hermes bundle. Fields listed are the ones the app sends or reads. The server may return more.",
+  "baseUrl": "https://placements.4gd.ai/backendapi-latest/",
+  "notificationBaseUrl": "https://placements.4gd.ai/backendapi-latest/inapp",
+  "socketUrl": "https://placements.4gd.ai/",
+  "auth": {
+    "type": "bearer",
+    "header": "Authorization",
+    "value": "Bearer {{studentAuthToken}}",
+    "storageKey": "studentAuthToken",
+    "howTheAppGetsTheToken": "POST user/validatestudent or POST students/verifyOtp returns data.token. The app saves that string and, on later axios calls, reads it back and sets Authorization.",
+    "alsoStored": {
+      "studentData": "JSON profile from data.studentData, or the whole data object when studentData is absent",
+      "isLoggedIn": "the string true"
+    },
+    "on401": "The axios error handler clears studentAuthToken, studentData, and isLoggedIn.",
+    "postman": "On the collection, add header Authorization: Bearer {{studentAuthToken}}. Run a login route first and save data.token into that variable. Login, OTP, password-reset, and version check do not need the header."
+  },
+  "studentProfileFieldsTheAppUses": [
+    "studentID",
+    "fullName",
+    "emailID",
+    "phoneNumber",
+    "batch",
+    "department",
+    "graduateDegree",
+    "placementTier",
+    "currentCGPA",
+    "ugCGPA",
+    "internshipOfferedAt",
+    "summerInternshipOfferedAt",
+    "tenthPercentage",
+    "twelfthPercentage",
+    "activeBacklogs"
+  ],
+  "routes": [
+    { "name": "login",
+      "method": "POST",
+      "path": "user/validatestudent",
+      "url": "https://placements.4gd.ai/backendapi-latest/user/validatestudent",
+      "purpose": "Check the SRN and password. The logged-in app then stores data.token and the student profile.",
+      "auth": "Not required.",
+      "input": {
+        "contentType": "application/json",
+        "body": {
+          "studentID": "SRN",
+          "password": "string"
+        }
+      },
+      "output": {
+        "body": {
+          "token": "string saved as studentAuthToken",
+          "studentData": "profile object. If this key is missing, the app treats the whole JSON body as the profile",
+          "message": "shown when the request fails"
+        },
+        "statusCodesTheLoginScreenBranchesOn": {
+          "401": "Invalid password, please try again.",
+          "404": "A user does not exist."
+        }
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/user/validatestudent",
+        "headers": {"Content-Type": "application/json"},
+        "body": {"studentID": "{{studentID}}", "password": "{{password}}"}
+      }
+    },
+    { "name": "sendOtp",
+      "method": "POST",
+      "path": "students/sendOtp",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/sendOtp",
+      "purpose": "Email a one-time password. Used after a successful password check, and again for password reset.",
+      "auth": "Not required. These calls use fetch and do not attach the bearer token.",
+      "input": {
+        "contentType": "application/json",
+        "variants": [
+          {
+            "when": "login OTP",
+            "body": {"studentID": "SRN"}
+          },
+          {
+            "when": "password reset",
+            "body": {"studentID": "SRN", "purpose": "passwordReset"}
+          }
+        ]
+      },
+      "output": {
+        "success": {"success": true, "email": "address the OTP was sent to"},
+        "failure": {"success": false, "message": "string shown in the alert"}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/sendOtp",
+        "headers": {"Content-Type": "application/json"},
+        "body": {"studentID": "{{studentID}}", "purpose": "passwordReset"}
+      }
+    },
+    { "name": "verifyOtp",
+      "method": "POST",
+      "path": "students/verifyOtp",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/verifyOtp",
+      "purpose": "Check the OTP. Login stores the token and profile. Password reset stores resetToken for the next call.",
+      "auth": "Not required on the fetch used by the reset screen. The in-app login path uses axios, so a previously saved token would be attached if one exists.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"studentID": "SRN", "otp": "string"}
+      },
+      "output": {
+        "login": {
+          "success": true,
+          "studentData": "profile",
+          "token": "saved as studentAuthToken"
+        },
+        "passwordReset": {
+          "success": true,
+          "resetToken": "sent to students/updatePassword",
+          "message": "string on failure"
+        }
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/verifyOtp",
+        "headers": {"Content-Type": "application/json"},
+        "body": {"studentID": "{{studentID}}", "otp": "{{otp}}"}
+      }
+    },
+    { "name": "updatePassword",
+      "method": "POST",
+      "path": "students/updatePassword",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/updatePassword",
+      "purpose": "Set a new password after OTP verification.",
+      "auth": "Uses resetToken in the body, not the bearer header.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"newPassword": "string", "resetToken": "from verifyOtp"}
+      },
+      "output": {
+        "success": "HTTP 200. The app then shows Password updated successfully.",
+        "failure": {"message": "string"}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/updatePassword",
+        "headers": {"Content-Type": "application/json"},
+        "body": {"newPassword": "{{newPassword}}", "resetToken": "{{resetToken}}"}
+      }
+    },
+    { "name": "changePassword",
+      "method": "POST",
+      "path": "students/changePassword",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/changePassword",
+      "purpose": "Change the password while already logged in.",
+      "auth": "Bearer token, set explicitly from the in-memory auth token.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"currentPassword": "string", "newPassword": "string"}
+      },
+      "output": {
+        "success": "HTTP 200. The app shows Password changed successfully.",
+        "failure": "any other status is treated as a failure"
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/changePassword",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"currentPassword": "{{currentPassword}}", "newPassword": "{{newPassword}}"}
+      }
+    },
+    { "name": "getStudent",
+      "method": "GET",
+      "path": "students/{studentID}",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/{{studentID}}",
+      "purpose": "Reload the logged-in student's profile.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"path": {"studentID": "SRN from the saved profile"}},
+      "output": {
+        "ifBodyHasStudentId": "the JSON body is the profile",
+        "elseIfSuccess": {"success": true, "studentData": "profile"},
+        "failure": {"message": "Failed to fetch student data"}
+      },
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/{{studentID}}",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "updateStudentInfo",
+      "method": "POST",
+      "path": "students/updateStudentInfo",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/updateStudentInfo",
+      "purpose": "Save email and phone on the profile.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {
+          "studentID": "SRN",
+          "emailID": "email",
+          "phoneNumber": "10-digit string"
+        }
+      },
+      "output": {
+        "success": {"success": true},
+        "failure": {"success": false, "message": "string, or Failed to update profile."}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/updateStudentInfo",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {
+          "studentID": "{{studentID}}",
+          "emailID": "{{email}}",
+          "phoneNumber": "{{phone}}"
+        }
+      }
+    },
+    { "name": "uploadResume",
+      "method": "POST",
+      "path": "students/uploadResume",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/uploadResume",
+      "purpose": "Upload the student's default resume PDF.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "multipart/form-data",
+        "timeoutMs": 30000,
+        "headers": {"Accept": "application/json"},
+        "form": {
+          "resume": "PDF file. The app sends uri, type application/pdf, and a sanitized file name.",
+          "studentID": "SRN as a string"
+        }
+      },
+      "output": {
+        "success": {"success": true},
+        "failure": {"success": false, "message": "string, or Upload failed"}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/uploadResume",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"},
+        "body": "form-data: file field resume, text field studentID={{studentID}}. Do not set Content-Type yourself; Postman must add the multipart boundary."
+      }
+    },
+    { "name": "resumeStatus",
+      "method": "GET",
+      "path": "students/resumeStatus/{studentID}",
+      "url": "https://placements.4gd.ai/backendapi-latest/students/resumeStatus/{{studentID}}",
+      "purpose": "List uploaded resumes. The profile screen looks for the one whose eventID is default. An event screen looks for the one whose eventID matches that event.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"path": {"studentID": "URL-encoded SRN"}},
+      "output": {
+        "success": {
+          "success": true,
+          "resumes": [{"eventID": "default or an event id", "url": "file url"}]
+        }
+      },
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/students/resumeStatus/{{studentID}}",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "eventsByEligibility",
+      "method": "POST",
+      "path": "events/getEventsByStudentEligibility",
+      "url": "https://placements.4gd.ai/backendapi-latest/events/getEventsByStudentEligibility",
+      "purpose": "List placement events the student is eligible for.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {
+          "batch": "from profile",
+          "department": "from profile",
+          "graduateDegree": "from profile",
+          "placementTier": "from profile",
+          "currentCGPA": "from profile",
+          "ugCGPA": "from profile, or 0 when missing",
+          "internshipOfferedAt": "from profile",
+          "summerInternshipOfferedAt": "from profile",
+          "tenthPercentage": "from profile",
+          "twelfthPercentage": "from profile",
+          "activeBacklogs": "from profile, or 0 when missing"
+        }
+      },
+      "output": {
+        "success": {"httpStatus": 200, "events": "array"},
+        "otherStatuses": "the app shows an empty list"
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/events/getEventsByStudentEligibility",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {
+          "batch": "{{batch}}",
+          "department": "{{department}}",
+          "graduateDegree": "{{graduateDegree}}",
+          "placementTier": "{{placementTier}}",
+          "currentCGPA": "{{currentCGPA}}",
+          "ugCGPA": "{{ugCGPA}}",
+          "internshipOfferedAt": "{{internshipOfferedAt}}",
+          "summerInternshipOfferedAt": "{{summerInternshipOfferedAt}}",
+          "tenthPercentage": "{{tenthPercentage}}",
+          "twelfthPercentage": "{{twelfthPercentage}}",
+          "activeBacklogs": "{{activeBacklogs}}"
+        }
+      }
+    },
+    { "name": "eventDetails",
+      "method": "GET",
+      "path": "events/getEventDetails/{id}",
+      "url": "https://placements.4gd.ai/backendapi-latest/events/getEventDetails/{{eventID}}",
+      "purpose": "Load one event. If this is not HTTP 200, the app falls back to events/getEventDetailsByEventId.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "path": {"id": "event id"},
+        "headers": {"Content-Type": "application/json"}
+      },
+      "output": {"success": "HTTP 200 and the JSON body is the event. Anything else makes the app try the POST fallback."},
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/events/getEventDetails/{{eventID}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        }
+      }
+    },
+    { "name": "eventDetailsByEventId",
+      "method": "POST",
+      "path": "events/getEventDetailsByEventId",
+      "url": "https://placements.4gd.ai/backendapi-latest/events/getEventDetailsByEventId",
+      "purpose": "Load one event, either as a fallback for the GET or as the company-details request.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "variants": [
+          {
+            "when": "fallback after the GET fails",
+            "body": {"_id": "event id", "eventID": "same id"}
+          },
+          {
+            "when": "company details screen",
+            "body": {"_id": "event id", "companyUsername": "string", "eventName": "string"}
+          }
+        ]
+      },
+      "output": {
+        "fallback": "HTTP 200. The app reads data.event, and if that is missing it uses the whole data object.",
+        "companyDetails": "HTTP 200 and the app keeps the whole data object."
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/events/getEventDetailsByEventId",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"_id": "{{eventID}}", "eventID": "{{eventID}}"}
+      }
+    },
+    { "name": "applicationDetails",
+      "method": "POST",
+      "path": "studentevents/getApplicationDetails",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getApplicationDetails",
+      "purpose": "Load this student's application for one event.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"studentID": "SRN", "eventID": "string"}
+      },
+      "output": {"success": {"httpStatus": 200, "application": "object"}, "otherStatuses": "the app treats it as no application"},
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getApplicationDetails",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"studentID": "{{studentID}}", "eventID": "{{eventID}}"}
+      }
+    },
+    { "name": "checkApplyStatus",
+      "method": "POST",
+      "path": "studentevents/checkApplyStatus",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkApplyStatus",
+      "purpose": "Ask whether the student can apply, and why not.",
+      "auth": "Bearer token, set explicitly when a token is in storage, and also added by the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"studentID": "SRN", "eventID": "string"}
+      },
+      "output": {
+        "applied": "boolean. The app also accepts hasApplied if applied is missing.",
+        "canApply": "boolean",
+        "eligibilityReasons": "string array"
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkApplyStatus",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"studentID": "{{studentID}}", "eventID": "{{eventID}}"}
+      }
+    },
+    { "name": "checkApplyStatusBulk",
+      "method": "POST",
+      "path": "studentevents/checkApplyStatusBulk",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkApplyStatusBulk",
+      "purpose": "Mark each event in a list as Applied or Apply Now.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"eventIDs": ["event _id", "event _id"]}
+      },
+      "output": {
+        "statuses": "object keyed by event _id. Each value has applied: boolean. The app labels true as Applied and false as Apply Now."
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkApplyStatusBulk",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"eventIDs": ["{{eventID}}"]}
+      }
+    },
+    { "name": "apply",
+      "method": "POST",
+      "path": "studentevents/apply",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/apply",
+      "purpose": "Submit an application to an event.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {
+          "applicationStatus": "Applied",
+          "companyUsername": "string",
+          "eventID": "string",
+          "eventName": "string",
+          "fullName": "student name",
+          "studentID": "SRN",
+          "customFieldResponses": "answers for that event's extra questions. The form builds this object; it has no fixed keys in the client."
+        }
+      },
+      "output": {
+        "success": "HTTP 201",
+        "403": {"message": "string", "eligibilityReasons": "string array"},
+        "409": {"message": "already applied or a scheduling conflict"},
+        "502": "The app shows a temporary server-unavailable message.",
+        "other": {"message": "string"}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/apply",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {
+          "applicationStatus": "Applied",
+          "companyUsername": "{{companyUsername}}",
+          "eventID": "{{eventID}}",
+          "eventName": "{{eventName}}",
+          "fullName": "{{fullName}}",
+          "studentID": "{{studentID}}",
+          "customFieldResponses": {}
+        }
+      }
+    },
+    { "name": "unapply",
+      "method": "POST",
+      "path": "studentevents/unapply",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/unapply",
+      "purpose": "Withdraw an application.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "timeoutMs": 120000,
+        "body": {"eventID": "string", "studentID": "SRN"}
+      },
+      "output": {"success": "HTTP 200"},
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/unapply",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"eventID": "{{eventID}}", "studentID": "{{studentID}}"}
+      }
+    },
+    { "name": "appliedEvents",
+      "method": "POST",
+      "path": "studentevents/getAppliedEvents",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getAppliedEvents",
+      "purpose": "List events the student has applied to. One screen then keeps items whose selectionStatus is placed or selected.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"studentID": "SRN"}
+      },
+      "output": {
+        "serviceReader": {"httpStatus": 200, "appliedEvents": "array"},
+        "placedEventsScreen": "that screen instead checks whether the JSON body itself is an array, then reads selectionStatus and eventID on each item"
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getAppliedEvents",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"studentID": "{{studentID}}"}
+      }
+    },
+    { "name": "uploadEventResume",
+      "method": "POST",
+      "path": "studentevents/uploadEventResume",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/uploadEventResume",
+      "purpose": "Upload a resume for one event application.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "multipart/form-data",
+        "timeoutMs": 30000,
+        "form": {
+          "resume": "PDF file",
+          "studentID": "SRN",
+          "eventID": "string",
+          "originalFilename": "original file name"
+        }
+      },
+      "output": {
+        "success": {"success": true},
+        "failure": {"success": false, "message": "string"}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/uploadEventResume",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"},
+        "body": "form-data: file resume, text studentID, eventID, originalFilename. Let Postman set the multipart boundary."
+      }
+    },
+    { "name": "getOfferLetter",
+      "method": "POST",
+      "path": "studentevents/getOfferLetter",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getOfferLetter",
+      "purpose": "Download the offer letter. A 404 makes the app call checkOfferLetter instead.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"studentID": "SRN", "eventID": "string"}
+      },
+      "output": {
+        "success": {"offerLetter": "file payload or url"},
+        "404": "the app falls back to checkOfferLetter"
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getOfferLetter",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"studentID": "{{studentID}}", "eventID": "{{eventID}}"}
+      }
+    },
+    { "name": "checkOfferLetter",
+      "method": "GET",
+      "path": "studentevents/checkOfferLetter/{studentID}/{eventID}",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkOfferLetter/{{studentID}}/{{eventID}}",
+      "purpose": "Check whether an offer letter exists and get its URL.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"path": {"studentID": "SRN", "eventID": "string"}},
+      "output": {"isAvailable": "boolean", "offerLetterUrl": "string when available"},
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkOfferLetter/{{studentID}}/{{eventID}}",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "checkSignedLetter",
+      "method": "GET",
+      "path": "studentevents/checkSignedLetter/{studentID}/{eventID}",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkSignedLetter/{{studentID}}/{{eventID}}",
+      "purpose": "Check whether the student already uploaded a signed offer letter.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"path": {"studentID": "SRN", "eventID": "string"}},
+      "output": {"isUploaded": "boolean"},
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/checkSignedLetter/{{studentID}}/{{eventID}}",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "uploadSignedLetter",
+      "method": "POST",
+      "path": "studentevents/uploadSignedLetter",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/uploadSignedLetter",
+      "purpose": "Upload the signed offer letter PDF.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "multipart/form-data",
+        "form": {
+          "signedLetter": "PDF file",
+          "studentID": "SRN",
+          "eventID": "string"
+        }
+      },
+      "output": {"success": "HTTP status from 200 up to but not including 300"},
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/uploadSignedLetter",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"},
+        "body": "form-data: file signedLetter, text studentID and eventID. Let Postman set the multipart boundary."
+      }
+    },
+    { "name": "completedEventsForFeedback",
+      "method": "POST",
+      "path": "studentevents/getCompletedEventsForFeedback",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getCompletedEventsForFeedback",
+      "purpose": "List completed events the student can write interview feedback for.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {"studentID": "SRN"}
+      },
+      "output": {"success": "HTTP 200 and the JSON body is the list. Other statuses become an empty list in the app."},
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/getCompletedEventsForFeedback",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"studentID": "{{studentID}}"}
+      }
+    },
+    { "name": "getInterviewExperience",
+      "method": "GET",
+      "path": "studentevents/application/{eventId}/student-experience",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/application/{{eventId}}/student-experience",
+      "purpose": "Load interview feedback already saved for an event. The path id is the event _id.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"path": {"eventId": "event _id"}},
+      "output": {
+        "success": "HTTP 200 and the JSON body. The screen reads eventDetails, and each saved round has a round field.",
+        "otherStatuses": "the app treats it as no saved feedback"
+      },
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/application/{{eventId}}/student-experience",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        }
+      }
+    },
+    { "name": "submitInterviewExperience",
+      "method": "POST",
+      "path": "studentevents/application/{eventId}/student-experience",
+      "url": "https://placements.4gd.ai/backendapi-latest/studentevents/application/{{eventId}}/student-experience",
+      "purpose": "Save feedback for one interview round. The path id is the event _id.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {
+          "round": "round id, such as Round 1",
+          "roundName": "string",
+          "interviewType": "string, default Technical",
+          "duration": "minutes, integer, at most 200",
+          "difficultyLevel": "string",
+          "questionsAsked": "string",
+          "topicsCovered": "string",
+          "preparation": "string",
+          "overallExperience": "string",
+          "rating": "number, required and not 0"
+        }
+      },
+      "output": {
+        "success": {"httpStatus": 200, "message": "string, or Experience submitted successfully"},
+        "failure": {"success": false, "message": "string"}
+      },
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/studentevents/application/{{eventId}}/student-experience",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {
+          "round": "Round 1",
+          "roundName": "Interview Round",
+          "interviewType": "Technical",
+          "duration": 45,
+          "difficultyLevel": "Medium",
+          "questionsAsked": "",
+          "topicsCovered": "",
+          "preparation": "",
+          "overallExperience": "",
+          "rating": 4
+        }
+      }
+    },
+    { "name": "registerPushToken",
+      "method": "POST",
+      "path": "tokens/register-token",
+      "url": "https://placements.4gd.ai/backendapi-latest/tokens/register-token",
+      "purpose": "Register the Firebase push token for this install.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {
+        "contentType": "application/json",
+        "body": {
+          "token": "FCM token",
+          "platform": "android or ios",
+          "appVersion": "app version string"
+        }
+      },
+      "output": "The app does not read the body. A thrown error is only logged.",
+      "postman": {
+        "method": "POST",
+        "url": "https://placements.4gd.ai/backendapi-latest/tokens/register-token",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{studentAuthToken}}"
+        },
+        "body": {"token": "{{fcmToken}}", "platform": "android", "appVersion": "1.0.0"}
+      }
+    },
+    { "name": "appVersion",
+      "method": "GET",
+      "path": "app-config/version",
+      "url": "https://placements.4gd.ai/backendapi-latest/app-config/version",
+      "purpose": "Decide whether this install must update.",
+      "auth": "Not required. Axios will still attach a saved token if one exists.",
+      "input": {},
+      "output": {
+        "data": {
+          "minSupportedVersion": {"android": "version string", "ios": "version string"},
+          "storeUrl": {"android": "url", "ios": "url"}
+        }
+      },
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/app-config/version"
+      }
+    },
+    { "name": "listNotifications",
+      "method": "GET",
+      "path": "/notifications",
+      "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications",
+      "purpose": "Page through in-app notifications.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"query": {"page": "defaults to 1", "limit": "defaults to 20"}},
+      "output": "The app returns the JSON body unchanged. Notification objects it later reads have category and actionUrl. category event, or an actionUrl of /events, /events/..., or /events?..., refreshes the event list.",
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications?page=1&limit=20",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "unreadNotificationCount",
+      "method": "GET",
+      "path": "/notifications/unread-count",
+      "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications/unread-count",
+      "purpose": "Badge count for unread notifications.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {},
+      "output": {"count": "number. Missing count is treated as 0."},
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications/unread-count",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "markNotificationRead",
+      "method": "PUT",
+      "path": "/notifications/{id}/read",
+      "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications/{{notificationId}}/read",
+      "purpose": "Mark one notification read.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"path": {"id": "notification id"}, "body": "none"},
+      "output": "The app ignores the body.",
+      "postman": {
+        "method": "PUT",
+        "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications/{{notificationId}}/read",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "markAllNotificationsRead",
+      "method": "PUT",
+      "path": "/notifications/read-all",
+      "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications/read-all",
+      "purpose": "Mark every notification read.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {"body": "none"},
+      "output": "The app ignores the body.",
+      "postman": {
+        "method": "PUT",
+        "url": "https://placements.4gd.ai/backendapi-latest/inapp/notifications/read-all",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    },
+    { "name": "websocketConfig",
+      "method": "GET",
+      "path": "/ws-config",
+      "url": "https://placements.4gd.ai/backendapi-latest/inapp/ws-config",
+      "purpose": "Get the WebSocket URL the app connects to for live notifications.",
+      "auth": "Bearer token via the axios interceptor.",
+      "input": {},
+      "output": {"wsUrl": "full websocket URL, including any query string"},
+      "postman": {
+        "method": "GET",
+        "url": "https://placements.4gd.ai/backendapi-latest/inapp/ws-config",
+        "headers": {"Authorization": "Bearer {{studentAuthToken}}"}
+      }
+    }
+  ],
+  "notHttpRoutes": [
+    {
+      "path": "/events",
+      "kind": "in-app screen path",
+      "note": "Used as a notification actionUrl. It is not an HTTP endpoint."
+    },
+    {
+      "path": "/my-events",
+      "kind": "in-app screen path",
+      "note": "Navigation route, not an HTTP endpoint."
+    },
+    {
+      "path": "/notifications",
+      "kind": "in-app screen path",
+      "note": "The HTTP list is under the inapp base URL. This string is the screen."
+    },
+    {
+      "path": "/student-experience",
+      "kind": "in-app screen path",
+      "note": "The HTTP resource is studentevents/application/{eventId}/student-experience."
+    }
+  ]
+}
