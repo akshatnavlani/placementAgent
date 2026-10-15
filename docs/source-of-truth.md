@@ -503,7 +503,8 @@ Reschedule updates the same event. Cancel removes or marks it cancelled. Do not 
 | Piece | Choice | Limit to respect |
 |---|---|---|
 | Process | Render free web service | 750 hours, no disk, restart anytime, outbound SMTP ports blocked (irrelevant here) |
-| Wake | External cron every 5 minutes | Must be inbound HTTP to Render. URL includes a secret. |
+| Wake | External cron every 5 minutes | Must be inbound HTTP to Render. `POST /cron/poll` carries the shared secret in an `Authorization: Bearer` header, not in the URL, so it stays out of request logs. |
+| Region | Render Virginia, Supabase `us-east-1` | The placement API resolves to AWS `us-east-1`. A Render service cannot change region after creation. |
 | Database | Supabase free | 500 MB, pause-and-restore, no daily backup |
 | Draft model | Cursor automation | Usage only on Prepare |
 | Chat | Telegram Bot API | Free |

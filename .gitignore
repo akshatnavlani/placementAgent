@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.log
+
+# Secrets and local overrides. Only the placeholder file is committed.
+.env
+.env.*
+!.env.example
+
+# Private data: unredacted API captures and the real resume.
+.private/
+resume/
+
+.DS_Store

@@ -1,6 +1,6 @@
 # PESU Placement Automation — Implementation Plan
 
-Status: ready to build after design freeze.
+Status: in build. Design is frozen; changes are recorded in both docs.
 Companion to: [`source-of-truth.md`](./source-of-truth.md).
 
 If a requirement in this plan disagrees with the source of truth, update the source of truth first, then this plan.
@@ -56,6 +56,8 @@ These are defaults for speed on the free tiers already chosen. Swap only if a ha
 
 Do not spend design time debating frameworks. The architecture does not depend on Node vs Python.
 
+**Chosen at M0:** Node.js 24 LTS and TypeScript, Fastify (its logger redacts credential fields), zod for environment checks, Vitest for tests. The Supabase JS client arrives in M1. TypeScript source lives in `app/`; `dist/` is build output and is not committed.
+
 ---
 
 ## 4. Repository layout (proposed)
@@ -90,7 +92,7 @@ pesu/
     └── ...
 ```
 
-Private data (password, tokens, real resume with contact details) never commits. Redacted API fixtures do.
+Private data (password, tokens, real resume with contact details) never commits. Redacted API fixtures do. The GitHub repository is public, so a fixture is redacted before it is committed, and unredacted captures stay in the gitignored `.private/` directory.
 
 ---
 
@@ -132,23 +134,25 @@ Phases from the source of truth map as:
 
 **Work**
 
-1. Create Supabase free project. Disable public table access. Prepare for service-role-only use.
-2. Create Render free web service (one only). Confirm no second free web service is planned in the same workspace.
-3. Create Telegram bot via BotFather. Note the bot token. Decide the chat is restricted to your user id after `/start`.
-4. Create Notion integration and a database with the properties from the source of truth (no event id, no eligibility column).
-5. Create Google Cloud OAuth client, publish the consent screen (not Testing), add yourself as test/user as needed, scopes start with `gmail.readonly`.
+1. Create Supabase free project in `us-east-1` through the Supabase MCP. Revoke anon and authenticated access in `public`, including default privileges for later tables. Enable RLS on every table. Service role only.
+2. Create Render free web service `pesu-placement-watcher` (one only) in Virginia through the Render MCP. Confirm no second free web service exists in the workspace. The service builds the `deploy` branch; `main` is not pushed until the owner asks.
+3. Telegram bot: moved to M3, where the token is first used.
+4. Create the Notion database through the Notion MCP with the properties from the source of truth (no event id, no eligibility column), plus a Board view grouped by Status. Status is a Notion status property: New is to-do; Applied, Assessment and Interview are in progress; Accepted, Rejected and Not Applied are complete. Type, Location, Stipend, CTC and Rounds are text until live drives show their shapes. The internal integration token and sharing the database with it need the owner, because no MCP can mint that token; both move to M4.
+5. Google Cloud OAuth client: moved to M5, where the OTP fallback first reads mail.
 6. Scaffold the HTTP service with:
    - `GET /health`
-   - `POST /cron/poll` (auth required, returns 401 without secret)
-   - config loaded only from environment
+   - `POST /cron/poll` (requires `Authorization: Bearer <CRON_SHARED_SECRET>`, returns 401 otherwise, checked before the body is read)
+   - config loaded only from environment; boot fails if the cron secret is missing or shorter than 32 characters
 7. Document required env vars in a local `.env.example` with empty values and no secrets.
+
+Regions: the placement API resolves to AWS `us-east-1`, so Render runs in Virginia and Supabase in `us-east-1`. A Render service cannot change region after creation.
 
 **Exit criteria**
 
 - Render URL responds to `/health`.
 - Unauthenticated `/cron/poll` fails.
-- Supabase project exists and is empty or schema-ready.
-- Telegram bot token and Notion integration token are in Render env, not in git.
+- Supabase project exists and is empty or schema-ready, and the anon key cannot read any table.
+- No secret is in git. The cron secret is in Render env. The Telegram token is required by M3 and the Notion token by M4.
 
 **Validation**
 
@@ -504,15 +508,16 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 
 | Variable | Needed by |
 |---|---|
+| `HOST`, `PORT`, `LOG_LEVEL` | Optional. Default `0.0.0.0`, `10000`, `info`. Render sets `PORT` |
 | `PLACEMENT_STUDENT_ID` | M1 |
 | `PLACEMENT_PASSWORD` | M1 |
-| `SUPABASE_URL` | M0 |
-| `SUPABASE_SERVICE_ROLE_KEY` | M0 |
+| `SUPABASE_URL` | M0 (project), M1 (first use) |
+| `SUPABASE_SERVICE_ROLE_KEY` | M1. A legacy `service_role` JWT or an `sb_secret_` key. The Supabase MCP cannot reveal it, so the owner pastes it once |
 | `TELEGRAM_BOT_TOKEN` | M3 |
 | `TELEGRAM_ALLOWED_CHAT_ID` | M3 |
 | `CRON_SHARED_SECRET` | M0 / M7 |
-| `NOTION_TOKEN` | M4 |
-| `NOTION_DATABASE_ID` | M4 |
+| `NOTION_TOKEN` | M4. Internal integration secret created by the owner |
+| `NOTION_DATABASE_ID` | M4. Set at M0, when the database is created |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN_PESU` | M5, M11 |
 | `GOOGLE_REFRESH_TOKEN_PERSONAL` | M11 |
 | `CURSOR_WEBHOOK_URL` | M9 |
