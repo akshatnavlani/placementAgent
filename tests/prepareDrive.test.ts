@@ -99,6 +99,25 @@ function prepareStore(seed: DriveRow, opts: { latex?: string | null } = {}) {
             then: (resolve: (v: { data: typeof answers; error: null }) => unknown) =>
               Promise.resolve(resolve({ data: answers, error: null })),
           }),
+          insert: async (payload: Record<string, unknown>) => {
+            answers.push({
+              id: `a${answers.length + 1}`,
+              approved: true,
+              reusable: true,
+              drive_id: null,
+              ...payload,
+            });
+            return { error: null };
+          },
+          update: (payload: Record<string, unknown>) => ({
+            eq: async (_c: string, id: string) => {
+              const row = answers.find((a) => a.id === id);
+              if (row) {
+                Object.assign(row, payload);
+              }
+              return { error: null };
+            },
+          }),
         };
       }
       if (table === "draft") {

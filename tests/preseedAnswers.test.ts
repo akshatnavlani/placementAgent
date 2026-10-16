@@ -49,6 +49,8 @@ const baseProfile: FullProfile = {
   manual: {
     jee: { percentile: "99" },
     coding: { platform: "CF", url: "https://cf", rating: "1500", contests: "10" },
+    awards: ["Hackathon 1st"],
+    certifications: ["Postman API"],
   },
   canonicalLatex: null,
   canonicalLatexUpdatedAt: null,
@@ -65,8 +67,18 @@ describe("preseedFromProfile", () => {
     expect(labels).toContain("CGPA");
     expect(labels).toContain("JEE Percentile");
     expect(labels).toContain("Coding Platform");
+    expect(labels).toContain("Awards");
+    expect(labels).toContain("Certifications");
+    expect(labels).toContain("Awards & Certifications");
     expect(labels.join(" ")).not.toMatch(/phone|dob|birth/i);
     expect(rows.every((r) => !String(r.value).includes("999"))).toBe(true);
+  });
+
+  it("suggests combined awards and certifications for drive labels", async () => {
+    const { suggestAnswerFromProfile } = await import("../app/db/answer.ts");
+    const value = suggestAnswerFromProfile("Awards & Certifications", baseProfile);
+    expect(value).toContain("Hackathon 1st");
+    expect(value).toContain("Postman API");
   });
 
   it("does not overwrite an existing approved answer", async () => {

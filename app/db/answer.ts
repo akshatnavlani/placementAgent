@@ -171,6 +171,17 @@ export async function preseedFromProfile(db: DbClient, profile: FullProfile): Pr
   if (m.coding?.contests) {
     seeds.push({ label: "Contest Results", value: m.coding.contests });
   }
+  if (m.certifications?.length) {
+    seeds.push({ label: "Certifications", value: m.certifications.join(", ") });
+  }
+  if (m.awards?.length) {
+    seeds.push({ label: "Awards", value: m.awards.join(", ") });
+  }
+  if (m.awards?.length || m.certifications?.length) {
+    const combined = [...(m.awards ?? []), ...(m.certifications ?? [])].join("; ");
+    seeds.push({ label: "Awards & Certifications", value: combined });
+    seeds.push({ label: "Awards and Certifications", value: combined });
+  }
 
   let count = 0;
   for (const seed of seeds) {
@@ -183,4 +194,59 @@ export async function preseedFromProfile(db: DbClient, profile: FullProfile): Pr
     count += 1;
   }
   return count;
+}
+
+/**
+ * Derive an answer for a drive question label from profile facts.
+ * Used so Prepare does not re-ask awards/certs already collected in /profile.
+ */
+export function suggestAnswerFromProfile(label: string, profile: FullProfile): string | null {
+  const n = normalizeAnswerLabel(label);
+  const m = profile.manual;
+  const awards = m.awards ?? [];
+  const certs = m.certifications ?? [];
+  const hasAward = /\bawards?\b/.test(n);
+  const hasCert = /\bcertifications?\b|\bcertificates?\b/.test(n);
+
+  if (hasAward && hasCert) {
+    const parts = [...awards, ...certs];
+    return parts.length > 0 ? parts.join("; ") : null;
+  }
+  if (hasAward && awards.length > 0) {
+    return awards.join(", ");
+  }
+  if (hasCert && certs.length > 0) {
+    return certs.join(", ");
+  }
+  return null;
+}
+
+/** Upsert profile-derived answers for any still-missing required field labels. */
+export async function hydrateAnswersFromProfile(
+  db: DbClient,
+  profile: FullProfile,
+  fieldLabels: string[],
+): Promise<number> {
+  const approved = await listApprovedReusable(db);
+  const have = new Set(approved.map((a) => a.label_normalized));
+  let n = 0;
+  for (const label of fieldLabels) {
+    const key = normalizeAnswerLabel(label);
+    if (have.has(key)) {
+      continue;
+    }
+    const value = suggestAnswerFromProfile(label, profile);
+    if (!value) {
+      continue;
+    }
+    await upsertReusableAnswer(db, {
+      labelDisplay: label,
+      value,
+      approved: true,
+      skipIfApprovedExists: true,
+    });
+    have.add(key);
+    n += 1;
+  }
+  return n;
 }

@@ -1,6 +1,6 @@
 import type { Config } from "../config.ts";
 import { hasCursorDrafter, requireCursorDrafter } from "../config.ts";
-import { listApprovedReusable } from "../db/answer.ts";
+import { hydrateAnswersFromProfile, listApprovedReusable, preseedFromProfile } from "../db/answer.ts";
 import type { DbClient } from "../db/client.ts";
 import { failDraft, getLatestDraft, insertPendingDraft } from "../db/draft.ts";
 import { getDrive, setDraftStatus } from "../db/drive.ts";
@@ -8,10 +8,14 @@ import { loadFullProfile } from "../db/profile.ts";
 import { buildDraftFacts, profileReadyForDraft } from "../profile/draftFacts.ts";
 import type { TelegramClient } from "../telegram/client.ts";
 import { deliverReadyDraft } from "./deliver.ts";
-import { buildPreparePayload, preparePayloadLogKeys, unansweredRequiredFields } from "./payload.ts";
-import { extractCustomFields } from "./payload.ts";
+import {
+  buildPreparePayload,
+  extractCustomFields,
+  preparePayloadLogKeys,
+  unansweredRequiredFields,
+  type CustomField,
+} from "./payload.ts";
 import { postCursorWebhook } from "./webhook.ts";
-import type { CustomField } from "./payload.ts";
 
 export type PrepareResult =
   | { kind: "preparing"; driveId: string }
@@ -122,8 +126,16 @@ export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<
     }
   }
 
-  const answers = await listApprovedReusable(deps.db);
   const fields = extractCustomFields(drive.raw_detail ?? drive.raw_list);
+  // Refresh answer bank from profile (awards/certs etc.) before the ask gate.
+  await preseedFromProfile(deps.db, profile);
+  await hydrateAnswersFromProfile(
+    deps.db,
+    profile,
+    fields.filter((f) => f.required).map((f) => f.label),
+  );
+
+  const answers = await listApprovedReusable(deps.db);
   const missing = unansweredRequiredFields(
     fields,
     answers.map((a) => ({ label: a.label_display, value: a.value })),
