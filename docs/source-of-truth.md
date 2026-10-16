@@ -248,6 +248,8 @@ The same check runs once a day for drives still in New, so a forgotten button st
 
 `applicationStatus: "Scheduled"` on the drive is the drive’s own state. It does not mean you have applied.
 
+**Live notes (M6):** `applied_at` / `last_apply_check_at` on `drive`. Button + free-text “I applied” share `verifyApplied`. Daily pass uses one `checkApplyStatus` per New drive when `last_apply_check_at` is null or ≥24h old; stops early on rate limit / unavailable. Under-6h reminder is a separate poll pass that sets `reminder_sent`.
+
 ### 5.5 Reminder and deadline
 
 - Clock for the reminder is the drive’s `deadline`, displayed in Asia/Kolkata.
@@ -409,7 +411,7 @@ Suggested tables, not a migration:
 |---|---|
 | `profile` | Platform snapshot and manual facts, in separate columns or JSON sections so a sync cannot overwrite JEE or a project you typed |
 | `secret` | Bearer token and its replacement time. Password stays in Render’s environment, not in a row. |
-| `drive` | Raw list JSON, raw detail JSON, extracted PDF text, `pdfUrls`, `isEligible`, status, deadline, `reminder_sent`, Notion page id, draft status |
+| `drive` | Raw list JSON, raw detail JSON, extracted PDF text, `pdfUrls`, `isEligible`, status, deadline, `reminder_sent`, `applied_at`, `last_apply_check_at`, Notion page id, draft status |
 | `answer` | Normalized question label, value, whether you approved it, whether it is reusable or drive-specific |
 | `draft` | Drive id, LaTeX, answers, PDF object path if compiled, state `pending` / `ready` / `failed` |
 | `mail` | Gmail message id, drive id, classification, applied transition |

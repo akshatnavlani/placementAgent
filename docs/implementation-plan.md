@@ -365,6 +365,15 @@ Google OAuth must work for the PESU account. If consent fails, ship chat-paste-o
 - A New drive with a deadline in 5 hours gets one reminder and no spam every 5 minutes.
 - After deadline, status becomes Not Applied and reminders stop.
 
+**Live notes (M6)**
+
+- `drive` columns: `applied_at`, `last_apply_check_at`.
+- `verifyApplied` only moves New → Applied on `checkApplyStatus` `applied: true`; false/fail stay New.
+- Telegram: `a:<id>` callback, free-text `/^\s*i\s*applied\s*[.!?]?\s*$/i` (0 / 1 / ≤8 ask-which / >8 tip).
+- Poll: under-6h reminder once (`reminder_sent`), then daily apply pass (stale ≥24h), stop early on `rateLimited` / `unavailable`.
+- Deadline → Not Applied already in M2 diff; reminders skip past-deadline and non-New.
+- Strategy: per-drive `checkApplyStatus` only — no `getAppliedEvents` in M6.
+
 ---
 
 ### M7 — Deploy hardening and cron

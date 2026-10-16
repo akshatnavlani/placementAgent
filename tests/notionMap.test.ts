@@ -31,6 +31,8 @@ function rowFromEvent(event: Record<string, unknown>, overrides: Partial<DriveRo
     first_seen_at: "2026-01-01T00:00:00.000Z",
     last_seen_at: "2026-01-01T00:00:00.000Z",
     alerted_at: null,
+    applied_at: null,
+    last_apply_check_at: null,
     ...overrides,
   };
 }

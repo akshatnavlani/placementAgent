@@ -30,7 +30,9 @@ import { extractPdfText } from "../pdf/extract.ts";
 import { TelegramClient } from "../telegram/client.ts";
 import { shouldAlert } from "../telegram/dedup.ts";
 import { notifyEligibleDrive } from "../telegram/notify.ts";
+import { runDailyApplyPass } from "./dailyApply.ts";
 import { diffCatalog, eventDisplayFields, extractPdfUrls, type DiffAction } from "./diff.ts";
+import { sendDeadlineReminders } from "./reminders.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -46,6 +48,9 @@ export type PollSummary = {
   pdfsFetched: number;
   notified: number;
   notionSynced: number;
+  reminded: number;
+  applyChecked: number;
+  markedApplied: number;
 };
 
 export type PollLogger = PlacementLogger & {
@@ -69,6 +74,10 @@ export type RunPollDeps = {
   notify?: boolean;
   /** When false, skip Notion sync even if Notion env is set. */
   notionSync?: boolean;
+  /** When false, skip under-6h reminder pass. */
+  reminders?: boolean;
+  /** When false, skip daily checkApplyStatus pass. */
+  dailyApply?: boolean;
   /** Internal: true after one renewal retry of the full poll. */
   alreadyRetried?: boolean;
 };
@@ -84,6 +93,9 @@ function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSumm
     pdfsFetched: 0,
     notified: 0,
     notionSynced: 0,
+    reminded: 0,
+    applyChecked: 0,
+    markedApplied: 0,
     ...partial,
   };
 }
@@ -253,6 +265,9 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   let pdfsFetched = 0;
   let notified = 0;
   let notionSynced = 0;
+  let reminded = 0;
+  let applyChecked = 0;
+  let markedApplied = 0;
 
   const touchIds: string[] = [];
   const notAppliedIds: string[] = [];
@@ -382,6 +397,56 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     }
   }
 
+  if (deps.reminders !== false) {
+    if (!hasTelegram(deps.config)) {
+      alerts.push("reminder_skipped");
+    } else {
+      const tg = requireTelegram(deps.config);
+      telegramClient =
+        telegramClient ??
+        new TelegramClient({
+          botToken: tg.botToken,
+          fetch: fetchImpl,
+          log,
+        });
+      const reminderResult = await sendDeadlineReminders({
+        db,
+        telegram: telegramClient,
+        chatId: tg.chatId,
+        now,
+      });
+      reminded = reminderResult.reminded;
+      alerts.push(...reminderResult.alerts);
+    }
+  }
+
+  if (deps.dailyApply !== false) {
+    const notionCfg = hasNotion(deps.config) ? requireNotion(deps.config) : null;
+    const notionForApply =
+      deps.notion ??
+      (notionCfg
+        ? new NotionClient({
+            token: notionCfg.token,
+            fetch: fetchImpl,
+            log,
+          })
+        : undefined);
+    const daily = await runDailyApplyPass({
+      config: deps.config,
+      db,
+      placement,
+      notion: notionForApply,
+      telegram: telegramClient,
+      chatId: hasTelegram(deps.config) ? requireTelegram(deps.config).chatId : undefined,
+      fetch: fetchImpl,
+      log,
+      now,
+    });
+    applyChecked = daily.applyChecked;
+    markedApplied = daily.markedApplied;
+    alerts.push(...daily.alerts);
+  }
+
   const wantNotion = deps.notionSync !== false;
   if (wantNotion) {
     if (!hasNotion(deps.config)) {
@@ -431,6 +496,9 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       pdfsFetched,
       notified,
       notionSynced,
+      reminded,
+      applyChecked,
+      markedApplied,
       alertCount: alerts.length,
     },
     "poll complete",
@@ -447,6 +515,9 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     pdfsFetched,
     notified,
     notionSynced,
+    reminded,
+    applyChecked,
+    markedApplied,
   };
 }
 

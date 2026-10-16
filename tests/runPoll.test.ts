@@ -182,6 +182,8 @@ describe("runPoll", () => {
         first_seen_at: "2026-01-01T00:00:00.000Z",
         last_seen_at: "2026-01-01T00:00:00.000Z",
         alerted_at: "2026-01-01T00:00:00.000Z",
+        applied_at: null,
+        last_apply_check_at: null,
       },
     ];
     const { db, rows, ops } = memoryStore(seed);
@@ -194,6 +196,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
     });
@@ -226,6 +230,8 @@ describe("runPoll", () => {
         first_seen_at: "2026-01-01T00:00:00.000Z",
         last_seen_at: "2026-01-01T00:00:00.000Z",
         alerted_at: "2026-01-01T00:00:00.000Z",
+        applied_at: null,
+        last_apply_check_at: null,
       },
     ]);
     const placement = new PlacementClient({
@@ -242,6 +248,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       listExisting: async () => [...rows.values()],
     });
     expect(result.ok).toBe(false);
@@ -309,6 +317,8 @@ describe("runPoll", () => {
       first_seen_at: "2026-01-01T00:00:00.000Z",
       last_seen_at: "2026-01-01T00:00:00.000Z",
       alerted_at: "2026-01-01T00:00:00.000Z",
+      applied_at: null,
+      last_apply_check_at: null,
     };
 
     const { db, rows } = memoryStore([seeded]);
@@ -319,6 +329,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -332,6 +344,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:05:00.000Z"),
@@ -373,6 +387,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -432,6 +448,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -450,6 +468,8 @@ describe("runPoll", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:05:00.000Z"),

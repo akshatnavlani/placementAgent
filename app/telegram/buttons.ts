@@ -45,3 +45,17 @@ export function approveKeyboard(): Record<string, unknown> {
     inline_keyboard: [[{ text: "Approve", callback_data: "ok" }]],
   };
 }
+
+/** One I applied button per New drive (capped by caller). */
+export function chooseDriveKeyboard(
+  drives: Array<{ id: string; label: string }>,
+): Record<string, unknown> {
+  return {
+    inline_keyboard: drives.map((drive) => [
+      {
+        text: drive.label.slice(0, 40),
+        callback_data: encodeCallback("applied", drive.id),
+      },
+    ]),
+  };
+}

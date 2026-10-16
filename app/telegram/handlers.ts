@@ -1,10 +1,12 @@
+import { verifyApplied, verifyReplyText } from "../apply/verify.ts";
 import { beginOtpAfterApprove, completeOtp, type OtpDeps } from "../auth/otp.ts";
+import type { Config } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
+import { listNewDrives } from "../db/drive.ts";
 import { loadAuthState } from "../db/secret.ts";
 import type { PlacementClient } from "../placement/client.ts";
-import type { Config } from "../config.ts";
+import { chooseDriveKeyboard, decodeCallback, encodeCallback } from "./buttons.ts";
 import type { TelegramClient } from "./client.ts";
-import { decodeCallback } from "./buttons.ts";
 
 export type TelegramUpdate = {
   update_id?: number;
@@ -35,6 +37,38 @@ export type HandleUpdateDeps = {
   onSessionRestored?: () => void | Promise<void>;
   log?: OtpDeps["log"];
 };
+
+const I_APPLIED_RE = /^\s*i\s*applied\s*[.!?]?\s*$/i;
+
+function driveChoiceLabel(company: string | null, eventName: string | null): string {
+  const companyPart = company?.trim() || "Unknown";
+  const rolePart = eventName?.trim();
+  if (rolePart) {
+    return `${companyPart} — ${rolePart}`.slice(0, 40);
+  }
+  return companyPart.slice(0, 40);
+}
+
+async function runVerify(
+  deps: HandleUpdateDeps,
+  driveId: string,
+): Promise<{ text: string; reason: string }> {
+  if (!deps.config || !deps.db || !deps.placement) {
+    return { text: "Apply verify is not configured yet.", reason: "apply_unconfigured" };
+  }
+  const result = await verifyApplied(
+    {
+      config: deps.config,
+      db: deps.db,
+      placement: deps.placement,
+      telegram: deps.telegram,
+      chatId: deps.allowedChatId,
+      log: deps.log,
+    },
+    driveId,
+  );
+  return { text: verifyReplyText(result), reason: `apply_${result.kind}` };
+}
 
 export async function handleTelegramUpdate(
   deps: HandleUpdateDeps,
@@ -83,9 +117,11 @@ export async function handleTelegramUpdate(
       await deps.telegram.sendMessage(deps.allowedChatId, "Drafting not enabled yet.");
       return { handled: true };
     }
-    await deps.telegram.answerCallbackQuery(callback.id, "Apply verify not enabled yet");
-    await deps.telegram.sendMessage(deps.allowedChatId, "Apply verify not enabled yet.");
-    return { handled: true };
+    // applied
+    await deps.telegram.answerCallbackQuery(callback.id, "Checking…");
+    const verified = await runVerify(deps, decoded.driveId);
+    await deps.telegram.sendMessage(deps.allowedChatId, verified.text);
+    return { handled: true, reason: verified.reason };
   }
 
   const message = update.message;
@@ -116,6 +152,45 @@ export async function handleTelegramUpdate(
         return { handled: true, reason: "otp_paste_failed" };
       }
     }
+
+    if (I_APPLIED_RE.test(text)) {
+      if (!deps.db) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Apply verify is not configured yet.");
+        return { handled: true, reason: "apply_unconfigured" };
+      }
+      const news = await listNewDrives(deps.db);
+      if (news.length === 0) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "No New drives to check.");
+        return { handled: true, reason: "apply_none" };
+      }
+      if (news.length === 1) {
+        const verified = await runVerify(deps, news[0]!.id);
+        await deps.telegram.sendMessage(deps.allowedChatId, verified.text);
+        return { handled: true, reason: verified.reason };
+      }
+      if (news.length > 8) {
+        await deps.telegram.sendMessage(
+          deps.allowedChatId,
+          "Tap I applied on the drive alert.",
+        );
+        return { handled: true, reason: "apply_too_many" };
+      }
+      const choices = news.map((row) => ({
+        id: row.id,
+        label: driveChoiceLabel(row.company_name, row.event_name),
+      }));
+      // Ensure callback_data still fits.
+      for (const choice of choices) {
+        encodeCallback("applied", choice.id);
+      }
+      await deps.telegram.sendMessage(
+        deps.allowedChatId,
+        "Which drive?",
+        chooseDriveKeyboard(choices),
+      );
+      return { handled: true, reason: "apply_ask_which" };
+    }
+
     return { handled: true, reason: "message_ignored" };
   }
 

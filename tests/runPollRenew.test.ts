@@ -165,6 +165,8 @@ describe("runPoll renewal", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       notionSync: false,
       listExisting: async () => [],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -197,6 +199,8 @@ describe("runPoll renewal", () => {
         first_seen_at: "2026-01-01T00:00:00.000Z",
         last_seen_at: "2026-01-01T00:00:00.000Z",
         alerted_at: "2026-01-01T00:00:00.000Z",
+        applied_at: null,
+        last_apply_check_at: null,
       },
     ];
     const { db, rows } = memoryDb(seed);
@@ -220,6 +224,8 @@ describe("runPoll renewal", () => {
       db,
       placement,
       notify: false,
+      reminders: false,
+      dailyApply: false,
       notionSync: false,
       listExisting: async () => [...rows.values()],
     });

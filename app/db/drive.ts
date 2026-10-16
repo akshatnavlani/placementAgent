@@ -29,6 +29,8 @@ export type DriveRow = {
   first_seen_at: string;
   last_seen_at: string;
   alerted_at: string | null;
+  applied_at: string | null;
+  last_apply_check_at: string | null;
 };
 
 export type DriveUpsertFields = {
@@ -89,6 +91,8 @@ function mapRow(row: Record<string, unknown>): DriveRow {
     first_seen_at: String(row.first_seen_at),
     last_seen_at: String(row.last_seen_at),
     alerted_at: (row.alerted_at as string | null) ?? null,
+    applied_at: (row.applied_at as string | null) ?? null,
+    last_apply_check_at: (row.last_apply_check_at as string | null) ?? null,
   };
 }
 
@@ -256,5 +260,43 @@ export async function setNotionPageId(
     .eq("id", id);
   if (error) {
     throw new Error(`drive setNotionPageId failed: ${error.message}`);
+  }
+}
+
+export async function listNewDrives(db: DbClient): Promise<DriveRow[]> {
+  const all = await listDrives(db);
+  return all.filter((row) => row.status === "New");
+}
+
+/** New → Applied only. Records applied_at. */
+export async function markApplied(db: DbClient, id: string, now: Date = new Date()): Promise<boolean> {
+  const iso = now.toISOString();
+  const { data, error } = await db
+    .from("drive")
+    .update({
+      status: "Applied",
+      applied_at: iso,
+      last_apply_check_at: iso,
+      updated_at: iso,
+    })
+    .eq("id", id)
+    .eq("status", "New")
+    .select("id");
+  if (error) {
+    throw new Error(`drive markApplied failed: ${error.message}`);
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+export async function markApplyChecked(db: DbClient, id: string, now: Date = new Date()): Promise<void> {
+  const { error } = await db
+    .from("drive")
+    .update({
+      last_apply_check_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive markApplyChecked failed: ${error.message}`);
   }
 }
