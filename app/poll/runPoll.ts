@@ -1,3 +1,4 @@
+import { renewFromUnauthorized } from "../auth/renew.ts";
 import type { Config } from "../config.ts";
 import {
   hasNotion,
@@ -18,7 +19,7 @@ import {
   upsertFromList,
   type DriveRow,
 } from "../db/drive.ts";
-import { loadPlatformProfile } from "../db/profile.ts";
+import { loadPlatformProfile, upsertPlatformProfile } from "../db/profile.ts";
 import { clearBearerToken, loadBearerToken } from "../db/secret.ts";
 import { NotionClient } from "../notion/client.ts";
 import { syncEligibleDrives } from "../notion/sync.ts";
@@ -30,6 +31,8 @@ import { TelegramClient } from "../telegram/client.ts";
 import { shouldAlert } from "../telegram/dedup.ts";
 import { notifyEligibleDrive } from "../telegram/notify.ts";
 import { diffCatalog, eventDisplayFields, extractPdfUrls, type DiffAction } from "./diff.ts";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type PollSummary = {
   ok: boolean;
@@ -66,6 +69,8 @@ export type RunPollDeps = {
   notify?: boolean;
   /** When false, skip Notion sync even if Notion env is set. */
   notionSync?: boolean;
+  /** Internal: true after one renewal retry of the full poll. */
+  alreadyRetried?: boolean;
 };
 
 function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSummary {
@@ -152,20 +157,84 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       },
     });
 
-  const secret = await loadBearerToken(db);
-  if (!secret.bearerToken) {
-    log?.warn({ alert: "no_token" }, "poll skipped");
-    return emptySummary({ ok: false, alert: "no_token", alerts });
+  let telegramClient: TelegramClient | undefined = deps.telegram;
+  if (!telegramClient && hasTelegram(deps.config)) {
+    const tg = requireTelegram(deps.config);
+    telegramClient = new TelegramClient({
+      botToken: tg.botToken,
+      fetch: fetchImpl,
+      log,
+    });
   }
 
-  const profile = await loadPlatformProfile(db);
+  const tryRenewAndRetry = async (reason: string): Promise<PollSummary> => {
+    const renew = await renewFromUnauthorized({
+      config: deps.config,
+      db,
+      placement,
+      telegram: telegramClient,
+      log,
+      now,
+    });
+    if (renew.kind === "renewed" && !deps.alreadyRetried) {
+      log?.info({ alert: reason, renew: "retrying" }, "session renewed; retrying poll once");
+      return runPoll({ ...deps, alreadyRetried: true, db, placement, telegram: telegramClient });
+    }
+    if (renew.kind === "waiting" || renew.kind === "awaiting_otp") {
+      log?.warn({ alert: renew.kind }, "poll waiting on login approval/OTP");
+      return emptySummary({
+        ok: false,
+        alert: renew.kind === "waiting" ? "awaiting_login_approval" : "awaiting_otp",
+        alerts,
+      });
+    }
+    if (renew.kind === "renewed" && deps.alreadyRetried) {
+      log?.warn({ alert: "renew_retry_exhausted" }, "renewed but already retried");
+      return emptySummary({ ok: false, alert: "renew_retry_exhausted", alerts });
+    }
+    log?.warn(
+      { alert: reason, renew: renew.kind, detail: renew.kind === "failed" ? renew.reason : undefined },
+      "renew failed",
+    );
+    return emptySummary({ ok: false, alert: reason, alerts });
+  };
+
+  let secret = await loadBearerToken(db);
+  if (!secret.bearerToken) {
+    return tryRenewAndRetry("no_token");
+  }
+
+  let profile = await loadPlatformProfile(db);
   if (!profile) {
     log?.warn({ alert: "no_profile" }, "poll skipped");
     return emptySummary({ ok: false, alert: "no_profile", alerts });
   }
 
+  // Daily profile refresh while the token works.
+  const syncedAtMs = profile.platformSyncedAt ? Date.parse(profile.platformSyncedAt) : 0;
+  if (!Number.isFinite(syncedAtMs) || now.getTime() - syncedAtMs > DAY_MS) {
+    const student = await placement.getStudent(secret.bearerToken, profile.studentId);
+    if (student.kind === "unauthorized") {
+      return tryRenewAndRetry("unauthorized");
+    } else if (student.kind === "ok") {
+      await upsertPlatformProfile(db, profile.studentId, student.data, now);
+      profile = (await loadPlatformProfile(db)) ?? profile;
+    } else {
+      alerts.push(`profile_refresh:${student.kind}`);
+      log?.warn({ outcome: student.kind }, "daily getStudent failed");
+    }
+  }
+
   const { body } = buildEligibilityBody(profile.platform);
+  secret = await loadBearerToken(db);
+  if (!secret.bearerToken) {
+    return tryRenewAndRetry("no_token");
+  }
+
   const list = await placement.getEventsByStudentEligibility(secret.bearerToken, body);
+  if (list.kind === "unauthorized") {
+    return tryRenewAndRetry("unauthorized");
+  }
   if (list.kind !== "ok") {
     log?.warn({ alert: list.kind }, "catalog list failed; keeping prior drives");
     return emptySummary({ ok: false, alert: list.kind, alerts });
@@ -213,7 +282,36 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     const urls = extractPdfUrls(action.event);
 
     if (action.fetchDetail) {
-      const detailOutcome = await placement.getEventDetails(secret.bearerToken, action.id);
+      let detailOutcome = await placement.getEventDetails(secret.bearerToken!, action.id);
+      if (detailOutcome.kind === "unauthorized") {
+        const renew = await renewFromUnauthorized({
+          config: deps.config,
+          db,
+          placement,
+          telegram: telegramClient,
+          log,
+          now,
+        });
+        if (renew.kind === "renewed") {
+          secret = await loadBearerToken(db);
+          if (secret.bearerToken) {
+            detailOutcome = await placement.getEventDetails(secret.bearerToken, action.id);
+          }
+        } else if (renew.kind === "waiting" || renew.kind === "awaiting_otp") {
+          log?.warn({ alert: renew.kind }, "detail 401 entered login wait; stopping placement calls");
+          return emptySummary({
+            ok: false,
+            alert: renew.kind === "waiting" ? "awaiting_login_approval" : "awaiting_otp",
+            alerts,
+            inserted,
+            refreshed,
+            touched,
+            notApplied,
+            detailsFetched,
+            pdfsFetched,
+          });
+        }
+      }
       if (detailOutcome.kind === "ok") {
         const detail = detailOutcome.data;
         await setDetail(db, action.id, detail as Record<string, unknown>, now);
@@ -248,7 +346,6 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   notApplied = notAppliedIds.length;
 
   const wantNotify = deps.notify !== false;
-  let telegramClient: TelegramClient | undefined = deps.telegram;
   if (wantNotify && notifyCandidates.length > 0) {
     if (!hasTelegram(deps.config)) {
       log?.warn({ alert: "telegram_skipped" }, "telegram env missing; persistence ok");

@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "token": "redacted-verify-otp-token",
+  "studentData": {
+    "studentID": "PES1UG00FAKE",
+    "fullName": "Test Student",
+    "batch": 2027,
+    "department": "CSE",
+    "graduateDegree": "BTech",
+    "currentCGPA": 8,
+    "tenthPercentage": 90,
+    "twelfthPercentage": 90,
+    "activeBacklogs": 0
+  }
+}

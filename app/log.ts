@@ -2,12 +2,17 @@ const sensitiveKeys = [
   "password",
   "token",
   "bearerToken",
+  "bearer_token",
   "otp",
+  "code",
   "secret",
   "authorization",
   "apiKey",
   "serviceRoleKey",
   "refreshToken",
+  "refresh_token",
+  "access_token",
+  "client_secret",
 ];
 
 export const redactPaths = [

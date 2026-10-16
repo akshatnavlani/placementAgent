@@ -16,10 +16,10 @@ export function sanitizePlatformSnapshot(platform: Record<string, unknown>): Rec
 
 export async function loadPlatformProfile(
   db: DbClient,
-): Promise<{ studentId: string; platform: Record<string, unknown> } | null> {
+): Promise<{ studentId: string; platform: Record<string, unknown>; platformSyncedAt: string | null } | null> {
   const { data, error } = await db
     .from("profile")
-    .select("student_id, platform")
+    .select("student_id, platform, platform_synced_at")
     .eq("id", 1)
     .maybeSingle();
   if (error) {
@@ -31,6 +31,7 @@ export async function loadPlatformProfile(
   return {
     studentId: String(data.student_id),
     platform: (data.platform as Record<string, unknown>) ?? {},
+    platformSyncedAt: (data.platform_synced_at as string | null) ?? null,
   };
 }
 

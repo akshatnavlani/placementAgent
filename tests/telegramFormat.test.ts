@@ -74,4 +74,8 @@ describe("callback_data", () => {
     expect(decodeCallback(encodeCallback("applied", id))).toEqual({ kind: "applied", driveId: id });
     expect(encodeCallback("prepare", id).length).toBeLessThanOrEqual(64);
   });
+
+  it("decodes Approve as ok", () => {
+    expect(decodeCallback("ok")).toEqual({ kind: "approve" });
+  });
 });

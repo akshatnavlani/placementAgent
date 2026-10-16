@@ -1,7 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Config } from "../config.ts";
-import { requireTelegram } from "../config.ts";
+import { requirePlacementCredentials, requireSupabase, requireTelegram } from "../config.ts";
+import { createDbClient } from "../db/client.ts";
+import { PlacementClient } from "../placement/client.ts";
+import { clearBearerToken } from "../db/secret.ts";
+import { runPoll } from "../poll/runPoll.ts";
 import { TelegramClient } from "./client.ts";
 import { handleTelegramUpdate, type TelegramUpdate } from "./handlers.ts";
 
@@ -41,8 +45,51 @@ export function registerTelegramWebhook(app: FastifyInstance, config: Config): v
       },
     });
 
+    let db;
+    let placement;
+    try {
+      const supabase = requireSupabase(config);
+      requirePlacementCredentials(config);
+      db = createDbClient(supabase.url, supabase.serviceRoleKey);
+      placement = new PlacementClient({
+        log: {
+          info: (obj, msg) => request.log.info(obj, msg),
+          warn: (obj, msg) => request.log.warn(obj, msg),
+        },
+        onUnauthorized: async () => {
+          await clearBearerToken(db!);
+        },
+      });
+    } catch {
+      db = undefined;
+      placement = undefined;
+    }
+
     await handleTelegramUpdate(
-      { telegram: client, allowedChatId: telegramConfig.chatId },
+      {
+        telegram: client,
+        allowedChatId: telegramConfig.chatId,
+        config,
+        db,
+        placement,
+        log: {
+          info: (obj, msg) => request.log.info(obj, msg),
+          warn: (obj, msg) => request.log.warn(obj, msg),
+        },
+        onSessionRestored: async () => {
+          await runPoll({
+            config,
+            log: {
+              info: (obj, msg) => request.log.info(obj, msg),
+              warn: (obj, msg) => request.log.warn(obj, msg),
+              error: (obj, msg) => request.log.error(obj, msg),
+            },
+            db,
+            placement,
+            telegram: client,
+          });
+        },
+      },
       update ?? {},
     );
 

@@ -220,6 +220,8 @@ The poll is the token check. There is no separate “are we logged in?” loop.
 
 A network failure is not step 2.
 
+**Live notes (M5):** Waiting state lives on the singleton `secret` row. Approve callback is Telegram `ok`. OTP mail matching uses a 4–8 digit pattern on subject+snippet after `otp_sent_at`; codes are never logged. Without PESU Gmail OAuth, Approve prompts for chat paste after `sendOtp`.
+
 ### 5.3 Prepare
 
 Trigger: Prepare on that drive’s Telegram message.

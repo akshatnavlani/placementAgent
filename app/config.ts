@@ -16,6 +16,10 @@ const envSchema = z.object({
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
   NOTION_TOKEN: z.string().min(1).optional(),
   NOTION_DATABASE_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  GOOGLE_REFRESH_TOKEN_PESU: z.string().min(1).optional(),
+  GOOGLE_REFRESH_TOKEN_PERSONAL: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -105,4 +109,22 @@ export function normalizeNotionDatabaseId(raw: string): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
   return raw.trim();
+}
+
+export function requireGmailPesu(config: Config): {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+} {
+  return {
+    clientId: requireVar(config, "GOOGLE_CLIENT_ID"),
+    clientSecret: requireVar(config, "GOOGLE_CLIENT_SECRET"),
+    refreshToken: requireVar(config, "GOOGLE_REFRESH_TOKEN_PESU"),
+  };
+}
+
+export function hasGmailPesu(config: Config): boolean {
+  return Boolean(
+    config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET && config.GOOGLE_REFRESH_TOKEN_PESU,
+  );
 }

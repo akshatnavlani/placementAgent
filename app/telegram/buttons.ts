@@ -1,5 +1,9 @@
 export type DriveCallbackKind = "prepare" | "applied";
 
+export type CallbackDecoded =
+  | { kind: DriveCallbackKind; driveId: string }
+  | { kind: "approve" };
+
 export function encodeCallback(kind: DriveCallbackKind, driveId: string): string {
   const prefix = kind === "prepare" ? "p" : "a";
   const data = `${prefix}:${driveId}`;
@@ -9,7 +13,10 @@ export function encodeCallback(kind: DriveCallbackKind, driveId: string): string
   return data;
 }
 
-export function decodeCallback(data: string): { kind: DriveCallbackKind; driveId: string } | null {
+export function decodeCallback(data: string): CallbackDecoded | null {
+  if (data === "ok") {
+    return { kind: "approve" };
+  }
   const match = /^(p|a):(.+)$/.exec(data);
   if (!match) {
     return null;
@@ -30,5 +37,11 @@ export function driveActionKeyboard(driveId: string): Record<string, unknown> {
         { text: "I applied", callback_data: encodeCallback("applied", driveId) },
       ],
     ],
+  };
+}
+
+export function approveKeyboard(): Record<string, unknown> {
+  return {
+    inline_keyboard: [[{ text: "Approve", callback_data: "ok" }]],
   };
 }

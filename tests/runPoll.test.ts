@@ -34,24 +34,39 @@ function memoryStore(seed: DriveRow[] = []) {
   const db = {
     from(table: string) {
       if (table === "secret") {
+        const secretRow: Record<string, unknown> = {
+          id: 1,
+          bearer_token: "stored-token",
+          token_obtained_at: "2026-01-01T00:00:00.000Z",
+          token_source: "validatestudent",
+          login_wait_state: null,
+          login_wait_notified_at: null,
+          otp_sent_at: null,
+          otp_paste_prompted_at: null,
+        };
         return {
           select() {
             return {
               eq() {
                 return {
                   maybeSingle: async () => ({
-                    data: {
-                      bearer_token: "stored-token",
-                      token_obtained_at: "2026-01-01T00:00:00.000Z",
-                      token_source: "validatestudent",
-                    },
+                    data: { ...secretRow },
                     error: null,
                   }),
                 };
               },
             };
           },
-          upsert: async () => ({ error: null }),
+          update: (payload: Record<string, unknown>) => ({
+            eq: async () => {
+              Object.assign(secretRow, payload);
+              return { error: null };
+            },
+          }),
+          upsert: async (payload: Record<string, unknown>) => {
+            Object.assign(secretRow, payload);
+            return { error: null };
+          },
         };
       }
       if (table === "profile") {
@@ -62,6 +77,7 @@ function memoryStore(seed: DriveRow[] = []) {
                 return {
                   maybeSingle: async () => ({
                     data: {
+                      id: 1,
                       student_id: "PES1UG00FAKE",
                       platform: {
                         batch: 2027,
@@ -72,6 +88,8 @@ function memoryStore(seed: DriveRow[] = []) {
                         twelfthPercentage: 90,
                         activeBacklogs: 0,
                       },
+                      // Fresh so daily getStudent refresh is skipped in unit tests.
+                      platform_synced_at: "2099-01-01T00:00:00.000Z",
                     },
                     error: null,
                   }),
@@ -79,6 +97,8 @@ function memoryStore(seed: DriveRow[] = []) {
               },
             };
           },
+          update: async () => ({ error: null }),
+          upsert: async () => ({ error: null }),
         };
       }
       if (table === "drive") {

@@ -332,6 +332,14 @@ Do not wire Telegram until this is solid. Silent persistence bugs become spam.
 
 Google OAuth must work for the PESU account. If consent fails, ship chat-paste-only OTP and continue.
 
+**Live notes (M5)**
+
+- `secret` columns: `login_wait_state`, `login_wait_notified_at`, `otp_sent_at`, `otp_paste_prompted_at`.
+- Password renew on list/detail/`getStudent` 401 or missing bearer; full poll retries once.
+- OTP branch after Approve: `sendOtp` → Gmail when `GOOGLE_*` PESU is set, else Telegram paste; `verifyOtp` source stored as `verifyOtp`.
+- Daily `getStudent` when `platform_synced_at` is older than 24h.
+- Shipped paste-first when PESU Gmail OAuth is unset.
+
 ---
 
 ### M6 — Apply verify, reminder, deadline

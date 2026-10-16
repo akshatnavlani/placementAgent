@@ -353,6 +353,59 @@ export class PlacementClient {
       };
     });
   }
+
+  /** Login OTP only — never send purpose: passwordReset. */
+  sendOtp(studentID: string): Promise<PlacementOutcome<{ email?: string }>> {
+    return this.enqueue(async () => {
+      const raw = await this.request("sendOtp", {
+        method: "POST",
+        path: "students/sendOtp",
+        body: { studentID },
+        clearTokenOn401: false,
+      });
+      if (raw.kind !== "ok") {
+        return raw;
+      }
+      const json = raw.data.json;
+      if (!json || typeof json !== "object" || Array.isArray(json)) {
+        return { kind: "invalid", reason: "sendOtp body not an object" };
+      }
+      const obj = json as Record<string, unknown>;
+      if (obj.success === false) {
+        return { kind: "invalid", reason: "sendOtp success false" };
+      }
+      return {
+        kind: "ok",
+        data: { email: typeof obj.email === "string" ? obj.email : undefined },
+      };
+    });
+  }
+
+  verifyOtp(studentID: string, otp: string): Promise<PlacementOutcome<LoginOk>> {
+    return this.enqueue(async () => {
+      const raw = await this.request("verifyOtp", {
+        method: "POST",
+        path: "students/verifyOtp",
+        body: { studentID, otp },
+        clearTokenOn401: false,
+      });
+      if (raw.kind !== "ok") {
+        return raw;
+      }
+
+      const parsed = loginResponseSchema.safeParse(raw.data.json);
+      if (!parsed.success) {
+        return { kind: "invalid", reason: "verifyOtp schema mismatch" };
+      }
+
+      const profile = extractProfile(parsed.data);
+      const token = parsed.data.token;
+      if (typeof token === "string" && token.length > 0) {
+        return { kind: "ok", data: { token, profile } };
+      }
+      return { kind: "noToken", profile };
+    });
+  }
 }
 
 /** Exported for fixture tests. */
