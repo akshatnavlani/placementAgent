@@ -250,6 +250,8 @@ The same check runs once a day for drives still in New, so a forgotten button st
 
 **Live notes (M6):** `applied_at` / `last_apply_check_at` on `drive`. Button + free-text “I applied” share `verifyApplied`. Daily pass uses one `checkApplyStatus` per New drive when `last_apply_check_at` is null or ≥24h old; stops early on rate limit / unavailable. Under-6h reminder is a separate poll pass that sets `reminder_sent`.
 
+**Live notes (M7):** Skip (`s:<id>` / free-text) moves New → Not Applied immediately. Ops Telegram on poll hard failures and placement rate limits. Wake cron is GitHub Actions every 5 minutes (Render Cron Jobs are paid-only).
+
 ### 5.5 Reminder and deadline
 
 - Clock for the reminder is the drive’s `deadline`, displayed in Asia/Kolkata.
@@ -426,7 +428,7 @@ Allowed moves:
 |---|---|---|
 | — | New | Watcher, when `isEligible` becomes true |
 | New | Applied | Watcher, only after `applied: true` |
-| New | Not Applied | Watcher, after `deadline` |
+| New | Not Applied | Watcher, after `deadline`, or you via Skip |
 | Applied or later | Assessment, Interview, Accepted, Rejected | Mail worker, or you dragging the card |
 | Any later stage | New | Nobody, on a routine poll |
 
@@ -438,9 +440,9 @@ Official Bot API. The bot may message only the chat id captured when you start i
 
 | You see | You can do |
 |---|---|
-| New drive: company, role, deadline in IST, location, stipend or CTC, rounds | Prepare. I applied. |
+| New drive: company, role, deadline in IST, location, stipend or CTC, rounds | Prepare. I applied. Skip. |
 | “Deadline is close” on first sight inside 6 hours | Same |
-| One reminder under 6 hours | Prepare. I applied. |
+| One reminder under 6 hours | Prepare. I applied. Skip. |
 | “Preparing” | Wait |
 | Draft: answers plus PDF or LaTeX | Apply yourself in the official app, then tap I applied |
 | “Platform shows no application” or “could not verify” | Apply or retry I applied |
@@ -448,7 +450,7 @@ Official Bot API. The bot may message only the chat id captured when you start i
 | “Logged out, waiting for approval” | Approve, then paste OTP only if mail read fails |
 | Drive already pending | Nothing; the second Prepare is ignored |
 
-Free text “I applied” binds to the only New drive. Otherwise the bot asks which drive. Buttons carry the drive id so the wrong company cannot be checked.
+Free text “I applied” binds to the only New drive. Otherwise the bot asks which drive. Free text “skip” / “won't apply” works the same way and uses Skip buttons when several are New. Buttons carry the drive id so the wrong company cannot be checked. Skip moves New → Not Applied immediately, syncs Notion, and stops reminders and the daily apply check for that drive.
 
 ---
 

@@ -228,6 +228,21 @@ export async function markNotApplied(db: DbClient, ids: string[], now: Date = ne
   }
 }
 
+/** New → Not Applied for one drive. Returns whether a row moved. */
+export async function tryMarkNotApplied(db: DbClient, id: string, now: Date = new Date()): Promise<boolean> {
+  const iso = now.toISOString();
+  const { data, error } = await db
+    .from("drive")
+    .update({ status: "Not Applied", last_seen_at: iso, updated_at: iso })
+    .eq("id", id)
+    .eq("status", "New")
+    .select("id");
+  if (error) {
+    throw new Error(`drive tryMarkNotApplied failed: ${error.message}`);
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
 export async function markAlerted(
   db: DbClient,
   id: string,

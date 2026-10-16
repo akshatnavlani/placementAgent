@@ -399,6 +399,14 @@ Google OAuth must work for the PESU account. If consent fails, ship chat-paste-o
 
 M0–M7 green means you have a usable catalog + alert + apply-verify system without drafting.
 
+**Live notes (M7)**
+
+- Skip: Telegram `s:<id>` + free-text `skip` / `won't apply`; New → Not Applied + Notion; second keyboard row.
+- Ops Telegram: poll hard failures (not login-wait) and placement `rateLimited`, once per process key; Notion auth gate unchanged.
+- External wake: GitHub Actions [`.github/workflows/cron-poll.yml`](../.github/workflows/cron-poll.yml) every 5 minutes `POST /cron/poll` with Bearer secret (not in URL). Render Cron Jobs require a paid plan; free path uses Actions + `scripts/cron-poll.mjs` for local/Render paid cron later.
+- One free web service only (`pesu-placement-watcher`).
+- Logger redact paths cover password/token/otp/authorization and nested forms.
+
 ---
 
 ### M8 — Onboarding: profile and canonical resume

@@ -1,0 +1,32 @@
+# External wake: inbound POST every 5 minutes keeps the free Render web service awake.
+name: cron-poll
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: POST /cron/poll
+        env:
+          WATCHER_URL: ${{ secrets.WATCHER_URL }}
+          CRON_SHARED_SECRET: ${{ secrets.CRON_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WATCHER_URL:-}" ] || [ -z "${CRON_SHARED_SECRET:-}" ]; then
+            echo "WATCHER_URL and CRON_SHARED_SECRET secrets are required" >&2
+            exit 1
+          fi
+          url="${WATCHER_URL%/}/cron/poll"
+          code=$(curl -sS -o /tmp/poll-body.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer ${CRON_SHARED_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          echo "status=${code}"
+          head -c 500 /tmp/poll-body.json || true
+          echo
+          test "$code" = "202"

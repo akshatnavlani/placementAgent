@@ -70,10 +70,11 @@ describe("isUrgentDeadline", () => {
 });
 
 describe("callback_data", () => {
-  it("round-trips prepare and applied for a real-shaped id", () => {
+  it("round-trips prepare, applied, and skip for a real-shaped id", () => {
     const id = "6ad05fd6b7a2c9401084f819";
     expect(decodeCallback(encodeCallback("prepare", id))).toEqual({ kind: "prepare", driveId: id });
     expect(decodeCallback(encodeCallback("applied", id))).toEqual({ kind: "applied", driveId: id });
+    expect(decodeCallback(encodeCallback("skip", id))).toEqual({ kind: "skip", driveId: id });
     expect(encodeCallback("prepare", id).length).toBeLessThanOrEqual(64);
   });
 

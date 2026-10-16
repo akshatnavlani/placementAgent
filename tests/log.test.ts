@@ -1,7 +1,7 @@
 import { Writable } from "node:stream";
 import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
-import { loggerOptions } from "../app/log.ts";
+import { loggerOptions, redactPaths } from "../app/log.ts";
 
 function captureLogger() {
   const lines: string[] = [];
@@ -16,6 +16,22 @@ function captureLogger() {
 }
 
 describe("logger redaction", () => {
+  it("covers sensitive key paths", () => {
+    for (const key of [
+      "password",
+      "token",
+      "bearerToken",
+      "otp",
+      "authorization",
+      "refresh_token",
+      "client_secret",
+    ]) {
+      expect(redactPaths).toContain(key);
+      expect(redactPaths).toContain(`*.${key}`);
+    }
+    expect(redactPaths).toContain("req.headers.authorization");
+  });
+
   it("censors credentials at the top level and when nested", () => {
     const { log, lines } = captureLogger();
     log.info(

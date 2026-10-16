@@ -1,3 +1,4 @@
+import { skipDrive, skipReplyText } from "../apply/skip.ts";
 import { verifyApplied, verifyReplyText } from "../apply/verify.ts";
 import { beginOtpAfterApprove, completeOtp, type OtpDeps } from "../auth/otp.ts";
 import type { Config } from "../config.ts";
@@ -5,7 +6,12 @@ import type { DbClient } from "../db/client.ts";
 import { listNewDrives } from "../db/drive.ts";
 import { loadAuthState } from "../db/secret.ts";
 import type { PlacementClient } from "../placement/client.ts";
-import { chooseDriveKeyboard, decodeCallback, encodeCallback } from "./buttons.ts";
+import {
+  chooseDriveKeyboard,
+  chooseSkipDriveKeyboard,
+  decodeCallback,
+  encodeCallback,
+} from "./buttons.ts";
 import type { TelegramClient } from "./client.ts";
 
 export type TelegramUpdate = {
@@ -39,6 +45,7 @@ export type HandleUpdateDeps = {
 };
 
 const I_APPLIED_RE = /^\s*i\s*applied\s*[.!?]?\s*$/i;
+const SKIP_RE = /^\s*(skip|won'?t\s+apply|wont\s+apply)\s*[.!?]?\s*$/i;
 
 function driveChoiceLabel(company: string | null, eventName: string | null): string {
   const companyPart = company?.trim() || "Unknown";
@@ -68,6 +75,26 @@ async function runVerify(
     driveId,
   );
   return { text: verifyReplyText(result), reason: `apply_${result.kind}` };
+}
+
+async function runSkip(
+  deps: HandleUpdateDeps,
+  driveId: string,
+): Promise<{ text: string; reason: string }> {
+  if (!deps.config || !deps.db) {
+    return { text: "Skip is not configured yet.", reason: "skip_unconfigured" };
+  }
+  const result = await skipDrive(
+    {
+      config: deps.config,
+      db: deps.db,
+      telegram: deps.telegram,
+      chatId: deps.allowedChatId,
+      log: deps.log,
+    },
+    driveId,
+  );
+  return { text: skipReplyText(result), reason: `skip_${result.kind}` };
 }
 
 export async function handleTelegramUpdate(
@@ -116,6 +143,12 @@ export async function handleTelegramUpdate(
       await deps.telegram.answerCallbackQuery(callback.id, "Drafting not enabled yet");
       await deps.telegram.sendMessage(deps.allowedChatId, "Drafting not enabled yet.");
       return { handled: true };
+    }
+    if (decoded.kind === "skip") {
+      await deps.telegram.answerCallbackQuery(callback.id, "Skipping…");
+      const skipped = await runSkip(deps, decoded.driveId);
+      await deps.telegram.sendMessage(deps.allowedChatId, skipped.text);
+      return { handled: true, reason: skipped.reason };
     }
     // applied
     await deps.telegram.answerCallbackQuery(callback.id, "Checking…");
@@ -179,7 +212,6 @@ export async function handleTelegramUpdate(
         id: row.id,
         label: driveChoiceLabel(row.company_name, row.event_name),
       }));
-      // Ensure callback_data still fits.
       for (const choice of choices) {
         encodeCallback("applied", choice.id);
       }
@@ -189,6 +221,40 @@ export async function handleTelegramUpdate(
         chooseDriveKeyboard(choices),
       );
       return { handled: true, reason: "apply_ask_which" };
+    }
+
+    if (SKIP_RE.test(text)) {
+      if (!deps.db) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Skip is not configured yet.");
+        return { handled: true, reason: "skip_unconfigured" };
+      }
+      const news = await listNewDrives(deps.db);
+      if (news.length === 0) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "No New drives to skip.");
+        return { handled: true, reason: "skip_none" };
+      }
+      if (news.length === 1) {
+        const skipped = await runSkip(deps, news[0]!.id);
+        await deps.telegram.sendMessage(deps.allowedChatId, skipped.text);
+        return { handled: true, reason: skipped.reason };
+      }
+      if (news.length > 8) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Tap Skip on the drive alert.");
+        return { handled: true, reason: "skip_too_many" };
+      }
+      const choices = news.map((row) => ({
+        id: row.id,
+        label: driveChoiceLabel(row.company_name, row.event_name),
+      }));
+      for (const choice of choices) {
+        encodeCallback("skip", choice.id);
+      }
+      await deps.telegram.sendMessage(
+        deps.allowedChatId,
+        "Which drive?",
+        chooseSkipDriveKeyboard(choices),
+      );
+      return { handled: true, reason: "skip_ask_which" };
     }
 
     return { handled: true, reason: "message_ignored" };
