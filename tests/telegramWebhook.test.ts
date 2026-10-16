@@ -10,7 +10,7 @@ const app = buildServer(
     CRON_SHARED_SECRET: secret,
     LOG_LEVEL: "silent",
     TELEGRAM_BOT_TOKEN: "123:ABC",
-    TELEGRAM_ALLOWED_CHAT_ID: "2020704195",
+    TELEGRAM_ALLOWED_CHAT_ID: "9990001111",
     TELEGRAM_WEBHOOK_SECRET: webhookSecret,
   }),
 );
@@ -81,7 +81,7 @@ describe("POST /telegram/webhook", () => {
           callback_query: {
             id: "cq2",
             data: "p:6ad05fd6b7a2c9401084f819",
-            message: { chat: { id: 2020704195 } },
+            message: { chat: { id: 9990001111 } },
           },
         },
       });
