@@ -185,6 +185,7 @@ async function processMessage(
       notion: deps.notion,
       fetch: deps.fetch,
       now,
+      bodyText: msg.bodyText,
       log: deps.log,
     },
     mail,
@@ -192,6 +193,7 @@ async function processMessage(
     {
       drive: match.kind === "one" ? match.drive : driveId ? drives.find((d) => d.id === driveId) ?? null : null,
       ambiguousCandidates: match.kind === "many" ? ambiguous : undefined,
+      bodyText: msg.bodyText,
     },
   );
 

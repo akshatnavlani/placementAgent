@@ -541,6 +541,8 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 - Reschedule updates the same event.
 - Cancel removes or cancels it.
 
+**Live notes (M12):** Events go on a personal calendar named `placements` (auto-created; id in `calendar_sync`). Personal refresh needs `gmail.readonly` + `calendar`. Mail times win over `subEvents`; never use `deadline`. Key `(drive_id, round_key)` with `round_key` ∈ assessment|interview. Tables `calendar_event` + `calendar_sync`.
+
 ---
 
 ### M13 — Portable kit (optional)
@@ -591,7 +593,7 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 | `NOTION_TOKEN` | M4. Internal integration secret created by the owner |
 | `NOTION_DATABASE_ID` | M4. Set at M0, when the database is created |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN_PESU` | M5, M11 |
-| `GOOGLE_REFRESH_TOKEN_PERSONAL` | M11 |
+| `GOOGLE_REFRESH_TOKEN_PERSONAL` | M11, M12 (`gmail.readonly` + `calendar`) |
 | `CURSOR_WEBHOOK_URL` | M9 |
 | `CURSOR_WEBHOOK_SECRET` | M9 |
 | `DRAFT_CALLBACK_SECRET` | M9 |

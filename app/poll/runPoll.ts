@@ -1,6 +1,8 @@
 import { renewFromUnauthorized } from "../auth/renew.ts";
 import type { Config } from "../config.ts";
+import { syncSubEventsForDrive } from "../calendar/syncSubEvents.ts";
 import {
+  hasCalendarPersonal,
   hasNotion,
   hasTelegram,
   requireNotion,
@@ -336,6 +338,28 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
         const detail = detailOutcome.data;
         await setDetail(db, action.id, detail as Record<string, unknown>, now);
         detailsFetched += 1;
+        if (hasCalendarPersonal(deps.config)) {
+          try {
+            const cal = await syncSubEventsForDrive({
+              config: deps.config,
+              db,
+              driveId: action.id,
+              fetch: fetchImpl,
+              now,
+              log,
+            });
+            if (cal.created > 0) {
+              log?.info?.(
+                { driveId: action.id, created: cal.created },
+                "subEvent calendar sync",
+              );
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "calendar error";
+            log?.warn?.({ driveId: action.id, reason: message }, "subEvent calendar sync failed");
+            alerts.push(`calendar:${action.id}`);
+          }
+        }
         const detailUrls = extractPdfUrls(detail);
         if (detailUrls.length > 0) {
           for (const url of detailUrls) {

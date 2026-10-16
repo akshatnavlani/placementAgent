@@ -1,3 +1,7 @@
+import {
+  syncCalendarEvent,
+  type SyncEventResult,
+} from "../calendar/syncEvent.ts";
 import type { Config } from "../config.ts";
 import { hasNotion, requireNotion } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
@@ -28,6 +32,8 @@ export type ApplyClassificationDeps = {
   notion?: NotionClient;
   fetch?: typeof globalThis.fetch;
   now?: Date;
+  /** Mail body text for calendar time parsing (not stored on mail row). */
+  bodyText?: string;
   log?: {
     info?: (obj: Record<string, unknown>, msg?: string) => void;
     warn?: (obj: Record<string, unknown>, msg?: string) => void;
@@ -158,10 +164,12 @@ export async function applyClassification(
   options: {
     drive?: DriveRow | null;
     ambiguousCandidates?: DriveRow[];
+    bodyText?: string;
   } = {},
 ): Promise<ApplyResult> {
   const now = deps.now ?? new Date();
   const classification = mail.classification;
+  const bodyText = options.bodyText ?? deps.bodyText ?? "";
 
   // Ambiguity ask
   if (!mail.drive_id && options.ambiguousCandidates && options.ambiguousCandidates.length > 0) {
@@ -250,8 +258,41 @@ export async function applyClassification(
     statusWritten = null;
   }
 
+  let calendar: SyncEventResult | null = null;
+  if (
+    drive &&
+    (classification === "assessment" ||
+      classification === "interview" ||
+      classification === "reschedule" ||
+      classification === "cancel")
+  ) {
+    try {
+      calendar = await syncCalendarEvent({
+        config: deps.config,
+        db: deps.db,
+        drive,
+        classification,
+        subject: mail.subject,
+        body: bodyText,
+        fetch: deps.fetch,
+        now,
+        log: deps.log,
+      });
+      if (!calendar.ok) {
+        deps.log?.warn?.(
+          { driveId: drive.id, reason: calendar.reason },
+          "calendar sync failed",
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "calendar error";
+      deps.log?.warn?.({ driveId: drive.id, reason: message }, "calendar sync threw");
+      calendar = { ok: false, action: "skip", reason: message };
+    }
+  }
+
   // Informational reschedule/cancel / stage notify
-  const text = formatStageChange(drive, classification, classifyResult.reason);
+  const text = formatStageChange(drive, classification, classifyResult.reason, calendar);
   const notified = await notifyOnce(deps, mail, text, undefined, now);
 
   return {

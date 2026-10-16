@@ -152,6 +152,19 @@ export function hasGmailPersonal(config: Config): boolean {
   );
 }
 
+/** Same personal OAuth as Gmail; refresh must include calendar scope after M12 re-mint. */
+export function requireCalendarPersonal(config: Config): {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+} {
+  return requireGmailPersonal(config);
+}
+
+export function hasCalendarPersonal(config: Config): boolean {
+  return hasGmailPersonal(config);
+}
+
 export function requireDraftCallbackSecret(config: Config): string {
   return requireVar(config, "DRAFT_CALLBACK_SECRET");
 }

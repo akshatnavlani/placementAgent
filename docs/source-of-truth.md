@@ -275,7 +275,7 @@ Poll both mailboxes. The PESU account receives public shortlists. Either account
 
 Match mail to a stored drive by company and role. If two drives match, or none do, ask. Do not create a drive from mail.
 
-**Live notes (M11):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap uses a keyword query capped per account. Rule classifier only. `mail.notified_at` prevents double Telegram. Notion later-stage Status is written by the mail path; catalog polls still omit Status when Notion is already Assessment+. Calendar create/update stays M12.
+**Live notes (M11–M12):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap uses a keyword query capped per account. Rule classifier only. `mail.notified_at` prevents double Telegram. Notion later-stage Status is written by the mail path; catalog polls still omit Status when Notion is already Assessment+. Calendar create/update/cancel writes assessment and interview events to a personal `placements` calendar (mail times preferred over `subEvents`).
 
 ### 5.7 Onboarding (first run)
 
@@ -511,17 +511,17 @@ This automation is tied to one Cursor account. Other people are not added to it.
 
 OAuth client owned by you, consent screen published, not left in Testing. A Testing screen expires refresh tokens in 7 days unless the only scopes are basic profile. Gmail read and Calendar are sensitive scopes. A published unverified app shows a warning once and can keep long-lived refresh tokens. Those tokens still die if access is revoked, the Google password changes, or the token is unused for six months.
 
-Scopes: `gmail.readonly` and, in phase 2, a calendar scope that can create events. Not `gmail.modify`.
+Scopes: `gmail.readonly` and, for the personal account in phase 2, `https://www.googleapis.com/auth/calendar` (create the `placements` calendar and events). Not `gmail.modify`.
 
 You have authorized third-party apps with the PESU Google account before. Mailbox read is confirmed when this consent succeeds. Chat paste covers a failed OTP read. Stage tracking needs the same mailbox read.
 
 ### 11.2 Calendar (phase 2)
 
-Create or update an event for an assessment or interview that has a date. Prefer a time from the mail when the mail has one.
+Create or update an event for an assessment or interview that has a date. Prefer a time from the mail when the mail has one. Events live on a dedicated personal Google Calendar named exactly `placements` (created if missing), never on `primary`. The application `deadline` is not a calendar interview.
 
-`subEvents` are a weak source. The payload has both `eventDate` (an instant) and `startTime` (a clock string such as `"10:00"`). Do not add those together until a real drive is checked against the time you see in the app. The application `deadline` is not a calendar interview.
+`subEvents` are a weaker source than mail. The payload has both `eventDate` (an instant) and `startTime` / `endTime` (clock strings such as `"10:00"`). Verified composition rule: take the Asia/Kolkata **calendar date** of `eventDate`, then apply `startTime` and `endTime` as Asia/Kolkata wall clocks; ignore the clock portion of `eventDate`. Default duration is one hour when `endTime` is missing. Only subEvents whose names map to assessment or interview are scheduled.
 
-Reschedule updates the same event. Cancel removes or marks it cancelled. Do not create a second event for the same drive and round.
+Reschedule updates the same event (keyed by drive id + round: `assessment` or `interview`). Cancel removes it. Do not create a second event for the same drive and round.
 
 ### 11.3 Hosting
 
@@ -603,7 +603,7 @@ These do not change the design. They change a branch of it if the live result di
 | OTP-required login JSON | No token means start the approval flow | The condition for “no token” if the server returns a token plus an OTP flag |
 | TeX on Render’s free build | Compile there if it fits | Telegram sends LaTeX only |
 | Cursor agent can write Supabase or call Render | Draft row is the contract | If neither works, the draft stays in the Cursor run and Telegram cannot deliver it. That would have to be redesigned. |
-| `subEvents` clock versus the app UI | Do not merge `eventDate` and `startTime` yet | Calendar phase |
+| `subEvents` clock versus the app UI | Asia/Kolkata date of `eventDate` + `startTime`/`endTime` wall clocks (verified for calendar) | Revisit only if a live drive’s app UI disagrees |
 | Placement rate limit | The budget in section 6.4 stays under it | Back off further if a 429 appears |
 | Ineligible object shape | `isEligible: false` hides the drive | None, unless the flag is missing. A missing flag is uncertain: do not notify, store it, and alert. |
 | Google consent on the PESU account for `gmail.readonly` | Expected to succeed | OTP falls back to chat. Stage mail waits. |
