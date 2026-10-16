@@ -20,6 +20,11 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   GOOGLE_REFRESH_TOKEN_PESU: z.string().min(1).optional(),
   GOOGLE_REFRESH_TOKEN_PERSONAL: z.string().min(1).optional(),
+  CURSOR_WEBHOOK_URL: z.string().url().optional(),
+  CURSOR_WEBHOOK_SECRET: z.string().min(1).optional(),
+  DRAFT_CALLBACK_SECRET: z.string().min(32).optional(),
+  /** Public base URL of this watcher (e.g. https://pesu-placement-watcher.onrender.com). */
+  PUBLIC_BASE_URL: z.string().url().optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -127,4 +132,26 @@ export function hasGmailPesu(config: Config): boolean {
   return Boolean(
     config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET && config.GOOGLE_REFRESH_TOKEN_PESU,
   );
+}
+
+export function requireDraftCallbackSecret(config: Config): string {
+  return requireVar(config, "DRAFT_CALLBACK_SECRET");
+}
+
+export function requireCursorDrafter(config: Config): {
+  webhookUrl: string;
+  webhookSecret: string | undefined;
+  callbackSecret: string;
+  publicBaseUrl: string;
+} {
+  return {
+    webhookUrl: requireVar(config, "CURSOR_WEBHOOK_URL"),
+    webhookSecret: config.CURSOR_WEBHOOK_SECRET,
+    callbackSecret: requireDraftCallbackSecret(config),
+    publicBaseUrl: requireVar(config, "PUBLIC_BASE_URL").replace(/\/$/, ""),
+  };
+}
+
+export function hasCursorDrafter(config: Config): boolean {
+  return Boolean(config.CURSOR_WEBHOOK_URL && config.DRAFT_CALLBACK_SECRET && config.PUBLIC_BASE_URL);
 }

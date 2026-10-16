@@ -1,7 +1,9 @@
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "./config.ts";
-import { hasTelegram, requireTelegram } from "./config.ts";
+import { hasTelegram, requireSupabase, requireTelegram } from "./config.ts";
+import { createDbClient } from "./db/client.ts";
+import { assertDraftCallbackConfigured, draftCallbackBodySchema, handleDraftCallback } from "./draft/callback.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
 import { runPoll } from "./poll/runPoll.ts";
@@ -65,6 +67,48 @@ export function buildServer(config: Config): FastifyInstance {
       }
 
       return reply.code(202).send({ accepted: true, poll });
+    },
+  );
+
+  app.post(
+    "/draft/callback",
+    {
+      onRequest: async (request, reply) => {
+        let secret: string;
+        try {
+          secret = assertDraftCallbackConfigured(config);
+        } catch {
+          return reply.code(503).send({ error: "draft_callback_not_configured" });
+        }
+        if (!hasBearerSecret(request.headers.authorization, secret)) {
+          return reply.code(401).send({ error: "unauthorized" });
+        }
+      },
+    },
+    async (request, reply) => {
+      const parsed = draftCallbackBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "invalid_body" });
+      }
+
+      let db;
+      try {
+        const supabase = requireSupabase(config);
+        db = createDbClient(supabase.url, supabase.serviceRoleKey);
+      } catch {
+        return reply.code(503).send({ error: "supabase_not_configured" });
+      }
+
+      const result = await handleDraftCallback({
+        config,
+        db,
+        body: parsed.data,
+        log: {
+          info: (obj, msg) => request.log.info(obj, msg),
+          warn: (obj, msg) => request.log.warn(obj, msg),
+        },
+      });
+      return reply.code(result.status).send(result.body);
     },
   );
 

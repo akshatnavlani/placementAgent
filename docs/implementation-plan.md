@@ -460,6 +460,13 @@ M0–M7 green means you have a usable catalog + alert + apply-verify system with
 
 If neither Supabase write nor Render callback works from the cloud agent, stop and redesign delivery before building PDF compile. Do not leave drafts stranded inside Cursor.
 
+**Live notes (M9)**
+
+- Delivery path B: agent `POST /draft/callback` with `DRAFT_CALLBACK_SECRET`; no service role in Cursor.
+- Env: `CURSOR_WEBHOOK_URL`, optional `CURSOR_WEBHOOK_SECRET`, `DRAFT_CALLBACK_SECRET`, `PUBLIC_BASE_URL`.
+- `draft` table + `drive.draft_status`; Prepare idempotent while pending; missing LaTeX gates to `/profile`.
+- Instructions: [`cursor-automation/DRAFTER.md`](../cursor-automation/DRAFTER.md). Telegram file delivery remains M10.
+
 ---
 
 ### M10 — Draft delivery and optional PDF compile

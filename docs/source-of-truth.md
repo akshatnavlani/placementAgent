@@ -235,6 +235,8 @@ Trigger: Prepare on that drive’s Telegram message.
 
 Questions are `customFields`. Match saved answers by normalized label, not by `field id`, because those ids differ per drive. A dropdown answer must be one of `options`. A required field with no saved answer is asked in Telegram before the agent invents one. Do not guess.
 
+**Live notes (M9):** Prepare requires canonical LaTeX (`/profile`). Watcher POSTs Cursor webhook; agent POSTs `/draft/callback` with `DRAFT_CALLBACK_SECRET` (path B). `unansweredRequired` is left as gaps until M10 asks in chat. Full Telegram LaTeX/PDF send is M10.
+
 ### 5.4 I applied
 
 Trigger: the button on that drive, or the words “I applied” when exactly one drive is still New. If several are New, ask which one.

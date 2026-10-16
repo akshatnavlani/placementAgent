@@ -315,3 +315,23 @@ export async function markApplyChecked(db: DbClient, id: string, now: Date = new
     throw new Error(`drive markApplyChecked failed: ${error.message}`);
   }
 }
+
+export type DriveDraftStatus = "pending" | "ready" | "failed";
+
+export async function setDraftStatus(
+  db: DbClient,
+  id: string,
+  status: DriveDraftStatus | null,
+  now: Date = new Date(),
+): Promise<void> {
+  const { error } = await db
+    .from("drive")
+    .update({
+      draft_status: status,
+      updated_at: now.toISOString(),
+    })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive setDraftStatus failed: ${error.message}`);
+  }
+}

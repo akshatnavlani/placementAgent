@@ -59,7 +59,7 @@ describe("POST /telegram/webhook", () => {
     }
   });
 
-  it("answers Prepare stub for the allowed chat", async () => {
+  it("answers Prepare when drafter env is missing", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), {
         status: 200,
@@ -88,7 +88,7 @@ describe("POST /telegram/webhook", () => {
       expect(res.statusCode).toBe(200);
       expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
       const joined = JSON.stringify(fetchMock.mock.calls);
-      expect(joined).toContain("Drafting not enabled yet");
+      expect(joined).toContain("Drafter not configured");
     } finally {
       globalThis.fetch = original;
     }

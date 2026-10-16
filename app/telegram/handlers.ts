@@ -6,6 +6,7 @@ import type { DbClient } from "../db/client.ts";
 import { listNewDrives } from "../db/drive.ts";
 import { loadFullProfile } from "../db/profile.ts";
 import { loadAuthState } from "../db/secret.ts";
+import { prepareDrive, prepareReplyText } from "../draft/prepare.ts";
 import type { PlacementClient } from "../placement/client.ts";
 import {
   chooseDriveKeyboard,
@@ -195,9 +196,24 @@ export async function handleTelegramUpdate(
       return { handled: true, reason: `github_${decoded.action}` };
     }
     if (decoded.kind === "prepare") {
-      await deps.telegram.answerCallbackQuery(callback.id, "Drafting not enabled yet");
-      await deps.telegram.sendMessage(deps.allowedChatId, "Drafting not enabled yet.");
-      return { handled: true };
+      await deps.telegram.answerCallbackQuery(callback.id, "Preparing…");
+      if (!deps.config || !deps.db) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Drafter not configured.");
+        return { handled: true, reason: "prepare_unconfigured" };
+      }
+      const result = await prepareDrive(
+        {
+          config: deps.config,
+          db: deps.db,
+          telegram: deps.telegram,
+          chatId: deps.allowedChatId,
+          fetch: deps.fetch,
+          log: deps.log,
+        },
+        decoded.driveId,
+      );
+      await deps.telegram.sendMessage(deps.allowedChatId, prepareReplyText(result));
+      return { handled: true, reason: `prepare_${result.kind}` };
     }
     if (decoded.kind === "skip") {
       await deps.telegram.answerCallbackQuery(callback.id, "Skipping…");
