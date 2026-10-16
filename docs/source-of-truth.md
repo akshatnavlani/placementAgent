@@ -307,7 +307,11 @@ Not in that profile: `placementTier`, `ugCGPA`, `internshipOfferedAt`, `summerIn
 
 A real backlog count of 0 is sent as 0. Fields the profile does not have are omitted. Do not copy the mobile app’s habit of sending `0` for a missing `ugCGPA`.
 
-The response is `{ success, events, totalCount, eligibleCount, ineligibleCount, requestId }`. Each event is the full drive, not an id stub. Fields used by the watcher:
+The response is `{ success, events, totalCount, eligibleCount, ineligibleCount, requestId }`. Each event is the full drive, not an id stub.
+
+**Auth note (M1 live, 16 October 2026):** this list route currently returns HTTP 200 with `success: true` and the full `events` array even when the `Authorization` header is missing or the bearer is garbage. `GET events/getEventDetails/{id}`, `GET students/{id}`, and `POST studentevents/checkApplyStatus` still return HTTP 401 for a bad bearer. The watcher still attaches the bearer on every list call and still treats a future list 401 as session loss. Do not treat an unauthenticated list success as proof the token is valid.
+
+Fields used by the watcher:
 
 | Field | Use |
 |---|---|
@@ -334,14 +338,19 @@ Nested `_id` values on the job, rounds, questions, and sub-events are not the dr
 
 **JD files.** `pdfUrls` point at objects in the placement bucket. The NVIDIA line that said to refer to email was the same PDF already on the drive. Drafts use `briefJobDescription` plus those PDFs. There is no second NVIDIA mail to fetch.
 
-### 6.2 Used, not yet captured live
+### 6.2 Verified later (M1 live capture, 16 October 2026)
+
+| Call | Role | Live shape |
+|---|---|---|
+| `GET students/{studentID}` | Daily profile refresh, and a 401 signal | HTTP 200 body is the profile object itself (`studentID` present). It includes the login fields plus `placementTier`, `internshipOfferedAt`, `summerInternshipOfferedAt`, resume paths, and a `password` field. Strip `password` before storing in Supabase. Do not treat those extra academic fields as eligibility-body inputs. |
+| `POST studentevents/checkApplyStatus` | “I applied,” and the daily pass over New cards | Body `studentID`, `eventID`. Live response: `{ success, applied, canApply, message }`. The app also accepts `hasApplied` if `applied` is missing. `eligibilityReasons` may be absent. |
+
+### 6.2b Still not captured live
 
 | Call | Role | Notes from `routes.json` |
 |---|---|---|
 | `POST students/sendOtp` | OTP branch only, after you approve | Body `studentID`. Password-reset must send `purpose: "passwordReset"` and must not be used here. |
 | `POST students/verifyOtp` | Completes the OTP branch | Returns a token on the login path |
-| `GET students/{studentID}` | Daily profile refresh, and a 401 signal | |
-| `POST studentevents/checkApplyStatus` | “I applied,” and the daily pass over New cards | Body `studentID`, `eventID`. Response fields the app reads: `applied` or `hasApplied`, `canApply`, `eligibilityReasons` |
 | `POST studentevents/getApplicationDetails` | Optional read-back | Not required for version 1 if check-apply-status is enough |
 | `POST studentevents/getAppliedEvents` | Optional daily alternative to per-drive checks | One screen also reads `selectionStatus` of `placed` or `selected`. Unknown values stay unresolved. Do not map them to Rejected. |
 

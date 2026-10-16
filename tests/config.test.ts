@@ -31,8 +31,35 @@ describe("loadConfig", () => {
     expect(message).not.toContain(weak);
   });
 
-  it("does not expose unrelated environment variables", () => {
-    const config = loadConfig({ CRON_SHARED_SECRET: secret, PLACEMENT_PASSWORD: "hunter2" });
-    expect(Object.keys(config)).not.toContain("PLACEMENT_PASSWORD");
+  it("keeps placement and supabase credentials optional for /health boot", () => {
+    const config = loadConfig({ CRON_SHARED_SECRET: secret });
+    expect(config.PLACEMENT_PASSWORD).toBeUndefined();
+    expect(config.SUPABASE_URL).toBeUndefined();
+  });
+
+  it("loads optional M1 credentials when present and trims blanks", () => {
+    const config = loadConfig({
+      CRON_SHARED_SECRET: secret,
+      PLACEMENT_STUDENT_ID: " PES1UG00XX000 ",
+      PLACEMENT_PASSWORD: " hunter2 ",
+      SUPABASE_URL: " https://example.supabase.co ",
+      SUPABASE_SERVICE_ROLE_KEY: " sb_secret_test ",
+    });
+    expect(config.PLACEMENT_STUDENT_ID).toBe("PES1UG00XX000");
+    expect(config.PLACEMENT_PASSWORD).toBe("hunter2");
+    expect(config.SUPABASE_URL).toBe("https://example.supabase.co");
+    expect(config.SUPABASE_SERVICE_ROLE_KEY).toBe("sb_secret_test");
+  });
+
+  it("does not echo secret values in validation errors", () => {
+    const weak = "short-secret-value";
+    let message = "";
+    try {
+      loadConfig({ CRON_SHARED_SECRET: weak, PLACEMENT_PASSWORD: "hunter2" });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).not.toContain("hunter2");
+    expect(message).not.toContain(weak);
   });
 });

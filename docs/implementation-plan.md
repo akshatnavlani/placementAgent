@@ -179,7 +179,7 @@ Regions: the placement API resolves to AWS `us-east-1`, so Render runs in Virgin
 6. Implement `getEventDetails(id)`.
 7. Implement `getStudent(studentID)`.
 8. Implement `checkApplyStatus(studentID, eventID)`.
-9. Store redacted fixtures from the Deloitte / Fidelity / NVIDIA captures for tests. Strip tokens and any fields you do not want in git.
+9. Store redacted fixtures from live Deloitte / Fidelity / NVIDIA captures for tests. Strip tokens, password hashes, and personal fields before git.
 
 **Exit criteria**
 
@@ -187,6 +187,12 @@ Regions: the placement API resolves to AWS `us-east-1`, so Render runs in Virgin
 - List call returns events with `_id`, `isEligible`, `deadline`, `customFields`, `pdfUrls`.
 - Detail call for Fidelity’s `_id` succeeds.
 - A deliberate bad token produces a clean 401 path (no crash, no empty-catalog write).
+
+**Live notes (M1)**
+
+- `GET students/{id}` returns the profile at the top level (includes a `password` field — strip before persist).
+- `checkApplyStatus` returned `{ success, applied, canApply, message }` for an already-applied Fidelity drive.
+- `getEventsByStudentEligibility` currently ignores a bad/missing bearer (still 200 + catalog). Use `getEventDetails` (or getStudent / checkApplyStatus) to exercise the 401 path. Keep attaching the bearer on list calls.
 
 **Do not implement yet**
 

@@ -12,9 +12,11 @@
     "start": "node dist/main.js",
     "dev": "node --env-file-if-exists=.env --watch app/main.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "placement:smoke": "node --env-file-if-exists=.env scripts/placement-smoke.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "fastify": "^5.12.7",
     "zod": "^4.6.7"
   },

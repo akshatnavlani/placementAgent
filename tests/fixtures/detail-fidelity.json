@@ -1,0 +1,253 @@
+{
+  "_id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+  "updatedAt": "2026-10-16T00:09:25.770Z",
+  "deadline": "2026-10-16T03:30:00.000Z",
+  "customFields": [
+    {
+      "id": "field_1792040174260",
+      "label": "First Name",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f821"
+    },
+    {
+      "id": "field_1792040179955",
+      "label": "Middle Name",
+      "type": "text",
+      "required": false,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f822"
+    },
+    {
+      "id": "field_1792040186500",
+      "label": "Last Name",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f823"
+    },
+    {
+      "id": "field_1792040197052",
+      "label": "Country of Study",
+      "type": "dropdown",
+      "required": true,
+      "placeholder": "",
+      "options": [
+        "India"
+      ],
+      "_id": "6ad05fd6b7a2c9401084f824"
+    },
+    {
+      "id": "field_1792040226316",
+      "label": "Coding Platform",
+      "type": "dropdown",
+      "required": true,
+      "placeholder": "",
+      "options": [
+        "LeetCode",
+        "Codeforces",
+        "CodeChef",
+        "HackerRank",
+        "GeeksforGeeks",
+        "Other",
+        "Not Registered"
+      ],
+      "_id": "6ad05fd6b7a2c9401084f825"
+    },
+    {
+      "id": "field_1792040301827",
+      "label": "Coding Rating / Rank",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f826"
+    },
+    {
+      "id": "field_1792040315916",
+      "label": "Profile / Evidence Link",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f827"
+    },
+    {
+      "id": "field_1792040368052",
+      "label": "Hackathon / Competition Details",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f828"
+    },
+    {
+      "id": "field_1792040375596",
+      "label": "Hackathon / Competition Achievement",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f829"
+    },
+    {
+      "id": "field_1792040382892",
+      "label": "Level of Competition",
+      "type": "dropdown",
+      "required": true,
+      "placeholder": "",
+      "options": [
+        "College",
+        "Inter-college",
+        "State",
+        "National",
+        "International"
+      ],
+      "_id": "6ad05fd6b7a2c9401084f82a"
+    },
+    {
+      "id": "field_1792040553467",
+      "label": "Key Technical Project",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f82b"
+    },
+    {
+      "id": "field_1792040576307",
+      "label": "JEE / National Exam Percentile or Rank",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f82c"
+    },
+    {
+      "id": "field_1792040593595",
+      "label": "Remarks (If Any)",
+      "type": "text",
+      "required": true,
+      "placeholder": "",
+      "options": [],
+      "_id": "6ad05fd6b7a2c9401084f82d"
+    }
+  ],
+  "pdfUrls": [
+    "https://pesu-placements.s3.us-east-1.amazonaws.com/event-pdfs/6ad05fd6b7a2c9401084f819/1792040918234-Job_Description_%C3%A2%C2%80%C2%93_Graduate_Programmer_(Apprentice)_%C3%A2%C2%80%C2%93_2027.pdf"
+  ],
+  "zipUpload": {
+    "manifest": []
+  },
+  "compMode": "overall",
+  "companyId": "6acc51f76bc6ae6f61f932e6",
+  "companyUsername": "Fidelity International",
+  "eventName": "Fidelity International | Graduate Programmer (Apprentice) | Drive",
+  "companyName": "Fidelity International",
+  "applicationStatus": "Scheduled",
+  "tier": "2",
+  "eventType": "Full Time Employment",
+  "graduatingBatch": "2027",
+  "jobInfo": {
+    "briefJobDescription": "Designation\tGraduate Programmer (Apprentice)\nEligibility\tMinimum 70% in 10th, 12th and Graduation, with no active backlogs\nEligible Branches\tB.Tech. CSE, IT and ECE\n(including specialisations such as CSE-AI, CSE-ML, CSE-Data Science, CSE-Cyber Security and other specialisations offered under the eligible branches)\nBatch\t2027\nAnnual CTC\tINR 9.00 LPA (INR 8.00 LPA Fixed + Up to INR 1.00 Lakh Deferred Incentive)\nLocation\tBengaluru / Gurugram\nService Agreement\tNo\nAdditional Benefits\tMedical, life & accidental insurance, subsidised transport, leaves and relocation assistance, as applicable\n\nPlacement Drive Schedule:\n \n•\t(Monday) 23rd November 2026: Pre-placement Talk and Online assessment\n•\t(Tuesday) 24th November 2026: Interviews\nKindly acknowledge the above schedule and confirm the institute’s and students’ availability for the selection process on these dates.\n \nWe request you to share details of eligible and interested students in the attached format by 13th October 2026.\n \nWhile completing the student details in the attached format, please ensure the following:\n \n•\tCorrect branch/specialisation is mentioned for each student.\n•\tAcademic scores for 10th, 12th and Graduation are provided in percentage only.\n•\tUnder Additional Student Achievements, please provide details, wherever available, of the student's notable technical achievements, such as:\no\tCoding platform and rating/rank\no\tHackathon or technical competition achievement\no\tNotable technical project\no\tJEE or other national entrance exam percentile/rank\n•\tThe Additional Student Achievements fields are optional. If the information is unavailable or not applicable, the relevant field may be left blank.\n",
+    "positionOffered": "Graduate Programmer (Apprentice)",
+    "jobLocation": "Bengaluru / Gurugram",
+    "jobStatus": "",
+    "internshipCompensation": [],
+    "fteCompensation": [
+      {
+        "programKey": "overall",
+        "programLabel": "All Programs",
+        "amount": 900000,
+        "tier": "2",
+        "branches": []
+      }
+    ],
+    "bondServiceAgreement": "No",
+    "_id": "6ad05fd6b7a2c9401084f81a",
+    "compensationBreakdown": [],
+    "internshipStipend": 0,
+    "ctc": 900000
+  },
+  "modeOfSelection": {
+    "rounds": [
+      {
+        "name": "Technical",
+        "selections": [
+          "Assessment"
+        ],
+        "assessmentType": "Technical",
+        "testDuration": 90,
+        "_id": "6ad07c3db7a2c940108ad75e"
+      },
+      {
+        "name": "Tech interview",
+        "selections": [
+          "Interview"
+        ],
+        "assessmentType": "",
+        "testDuration": 0,
+        "_id": "6ad07c3db7a2c940108ad75f"
+      }
+    ],
+    "assessmentType": "",
+    "modeOfTestConduct": "",
+    "testDuration": 0,
+    "_id": "6ad05fd6b7a2c9401084f81b"
+  },
+  "educationFields": {
+    "bTech": [
+      "AIML",
+      "CSE",
+      "ECE"
+    ],
+    "mTech": [],
+    "computerApplication": [],
+    "architecture": [],
+    "design": [],
+    "management": [],
+    "commerce": [],
+    "economics": [],
+    "psychology": [],
+    "pharmacy": [],
+    "law": []
+  },
+  "academicRequirements": {
+    "gradeX": 70,
+    "gradeXII": 70,
+    "ugAggregateScore": 7,
+    "pgAggregateScore": "",
+    "activeBacklogs": 0,
+    "_id": "6ad05fd6b7a2c9401084f81e"
+  },
+  "subEvents": [
+    {
+      "name": "Pre Placement Talk",
+      "eventDate": "2026-11-22T18:30:00.000Z",
+      "startTime": "10:00",
+      "endTime": "15:00",
+      "eventVenue": "GJBC",
+      "description": "",
+      "_id": "6ad05fd6b7a2c9401084f81f"
+    },
+    {
+      "name": "Assessment",
+      "eventDate": "2026-11-22T18:30:00.000Z",
+      "startTime": "11:00",
+      "endTime": "12:00",
+      "eventVenue": "GJBC",
+      "description": "",
+      "_id": "6ad05fd6b7a2c9401084f820"
+    }
+  ],
+  "interviewers": [],
+  "notifications": [],
+  "createdAt": "2026-10-15T05:08:38.040Z",
+  "__v": 1,
+  "companyLogo": null,
+  "formattedEventDate": null
+}
