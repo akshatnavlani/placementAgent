@@ -213,6 +213,27 @@ describe("prepareDrive", () => {
     expect(result.kind).toBe("not_configured");
   });
 
+  it("returns need_answers when required fields are missing", async () => {
+    const { db } = prepareStore(
+      driveRow({
+        id: "d1",
+        raw_detail: {
+          customFields: [{ label: "Why us?", type: "text", required: true }],
+        },
+      }),
+    );
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    const result = await prepareDrive(
+      { config: baseConfig, db, telegram: tg(), chatId: "1", fetch: fetchMock as unknown as typeof fetch },
+      "d1",
+    );
+    expect(result.kind).toBe("need_answers");
+    if (result.kind === "need_answers") {
+      expect(result.fields.map((f) => f.label)).toEqual(["Why us?"]);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("marks pending on webhook success", async () => {
     const { db, drive, drafts } = prepareStore(driveRow({ id: "d1" }));
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));

@@ -2,13 +2,16 @@ import type { Config } from "../config.ts";
 import { hasCursorDrafter, requireCursorDrafter } from "../config.ts";
 import { listApprovedReusable } from "../db/answer.ts";
 import type { DbClient } from "../db/client.ts";
-import { failDraft, insertPendingDraft } from "../db/draft.ts";
+import { failDraft, getLatestDraft, insertPendingDraft } from "../db/draft.ts";
 import { getDrive, setDraftStatus } from "../db/drive.ts";
 import { loadFullProfile } from "../db/profile.ts";
 import { buildDraftFacts, profileReadyForDraft } from "../profile/draftFacts.ts";
 import type { TelegramClient } from "../telegram/client.ts";
-import { buildPreparePayload, preparePayloadLogKeys } from "./payload.ts";
+import { deliverReadyDraft } from "./deliver.ts";
+import { buildPreparePayload, preparePayloadLogKeys, unansweredRequiredFields } from "./payload.ts";
+import { extractCustomFields } from "./payload.ts";
 import { postCursorWebhook } from "./webhook.ts";
+import type { CustomField } from "./payload.ts";
 
 export type PrepareResult =
   | { kind: "preparing"; driveId: string }
@@ -17,7 +20,10 @@ export type PrepareResult =
   | { kind: "missing_latex" }
   | { kind: "not_configured" }
   | { kind: "no_profile" }
-  | { kind: "webhook_failed"; reason: string };
+  | { kind: "webhook_failed"; reason: string }
+  | { kind: "need_answers"; driveId: string; fields: CustomField[] }
+  | { kind: "redelivered"; driveId: string; pdf: boolean }
+  | { kind: "redeliver_failed"; driveId: string; reason: string };
 
 export type PrepareDeps = {
   config: Config;
@@ -30,6 +36,8 @@ export type PrepareDeps = {
     warn?: (obj: Record<string, unknown>, msg?: string) => void;
   };
   now?: Date;
+  /** When true, skip need_answers gate (after ask flow completed). */
+  skipAskGate?: boolean;
 };
 
 export function prepareReplyText(result: PrepareResult): string {
@@ -48,11 +56,18 @@ export function prepareReplyText(result: PrepareResult): string {
       return "No platform profile yet. Wait for a successful poll/login.";
     case "webhook_failed":
       return "Draft failed. Tap Prepare again.";
+    case "need_answers":
+      return "Need a few answers before preparing.";
+    case "redelivered":
+      return result.pdf ? "Draft re-sent (including PDF)." : "Draft re-sent.";
+    case "redeliver_failed":
+      return `Could not re-send draft: ${result.reason}`;
   }
 }
 
 /**
  * Start a Cursor draft for one drive. Idempotent while pending.
+ * Redelivers an undelivered ready draft without a new agent run.
  */
 export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<PrepareResult> {
   const now = deps.now ?? new Date();
@@ -77,8 +92,47 @@ export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<
     return { kind: "missing_latex" };
   }
 
-  const cursor = requireCursorDrafter(deps.config);
+  // Redeliver ready-but-undelivered without a new Cursor run.
+  if (drive.draft_status === "ready") {
+    const latest = await getLatestDraft(deps.db, driveId);
+    if (latest?.status === "ready" && latest.latex && !latest.delivered_at) {
+      const delivered = await deliverReadyDraft(
+        {
+          config: deps.config,
+          db: deps.db,
+          telegram: deps.telegram,
+          fetch: deps.fetch,
+          log: deps.log,
+          now,
+        },
+        driveId,
+      );
+      if (delivered.kind === "delivered" || delivered.kind === "already_delivered") {
+        return {
+          kind: "redelivered",
+          driveId,
+          pdf: delivered.kind === "delivered" ? delivered.pdf : false,
+        };
+      }
+      return {
+        kind: "redeliver_failed",
+        driveId,
+        reason: delivered.kind === "partial" ? delivered.reason : delivered.kind,
+      };
+    }
+  }
+
   const answers = await listApprovedReusable(deps.db);
+  const fields = extractCustomFields(drive.raw_detail ?? drive.raw_list);
+  const missing = unansweredRequiredFields(
+    fields,
+    answers.map((a) => ({ label: a.label_display, value: a.value })),
+  );
+  if (!deps.skipAskGate && missing.length > 0) {
+    return { kind: "need_answers", driveId, fields: missing };
+  }
+
+  const cursor = requireCursorDrafter(deps.config);
   const facts = buildDraftFacts(profile, answers);
   const callbackUrl = `${cursor.publicBaseUrl}/draft/callback`;
   const payload = buildPreparePayload({

@@ -489,6 +489,12 @@ If neither Supabase write nor Render callback works from the cloud agent, stop a
 - Required missing field is asked before the agent invents it.
 - Failed run allows a second Prepare.
 
+**Live notes (M10)**
+
+- Delivery on `/draft/callback` success: answers list + `.tex` via `sendDocument`; PDF via best-effort `/tmp` tectonic (LaTeX-only still success).
+- `draft.delivered_at` for idempotency; undelivered ready drafts redeliver on Prepare without a new agent run.
+- Required `customFields` gaps use `prepare_ask` on `profile.onboarding` before the Cursor webhook.
+
 **Definition of “version 1 complete”**
 
 M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (item 6 is mail).

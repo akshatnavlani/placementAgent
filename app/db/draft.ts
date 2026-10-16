@@ -12,6 +12,7 @@ export type DraftRow = {
   answers: DraftAnswer[];
   error: string | null;
   callback_at: string | null;
+  delivered_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +43,7 @@ function mapRow(row: Record<string, unknown>): DraftRow {
     answers: asAnswers(row.answers),
     error: (row.error as string | null) ?? null,
     callback_at: (row.callback_at as string | null) ?? null,
+    delivered_at: (row.delivered_at as string | null) ?? null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -144,6 +146,32 @@ export async function failDraft(
     .maybeSingle();
   if (error) {
     throw new Error(`draft fail failed: ${error.message}`);
+  }
+  return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
+export async function markDraftDelivered(
+  db: DbClient,
+  driveId: string,
+  now: Date = new Date(),
+): Promise<DraftRow | null> {
+  const latest = await getLatestDraft(db, driveId);
+  if (!latest || latest.status !== "ready") {
+    return null;
+  }
+  const iso = now.toISOString();
+  const { data, error } = await db
+    .from("draft")
+    .update({
+      delivered_at: iso,
+      updated_at: iso,
+    })
+    .eq("id", latest.id)
+    .eq("status", "ready")
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    throw new Error(`draft deliver mark failed: ${error.message}`);
   }
   return data ? mapRow(data as Record<string, unknown>) : null;
 }

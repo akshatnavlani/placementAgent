@@ -104,17 +104,32 @@ export function unansweredRequiredLabels(
   fields: CustomField[],
   approvedAnswers: Array<{ label: string; value: string }>,
 ): string[] {
+  return unansweredRequiredFields(fields, approvedAnswers).map((f) => f.label);
+}
+
+/** Required custom fields still missing from approved answers. */
+export function unansweredRequiredFields(
+  fields: CustomField[],
+  approvedAnswers: Array<{ label: string; value: string }>,
+): CustomField[] {
   const have = new Set(approvedAnswers.map((a) => normalizeAnswerLabel(a.label)));
-  const missing: string[] = [];
+  const missing: CustomField[] = [];
   for (const field of fields) {
     if (!field.required) {
       continue;
     }
     if (!have.has(normalizeAnswerLabel(field.label))) {
-      missing.push(field.label);
+      missing.push(field);
     }
   }
   return missing;
+}
+
+export function requiredFieldsForDrive(drive: {
+  raw_detail: Record<string, unknown> | null;
+  raw_list: Record<string, unknown>;
+}): CustomField[] {
+  return extractCustomFields(drive.raw_detail ?? drive.raw_list).filter((f) => f.required);
 }
 
 export function buildPreparePayload(input: {

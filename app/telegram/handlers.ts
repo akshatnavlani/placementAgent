@@ -6,6 +6,12 @@ import type { DbClient } from "../db/client.ts";
 import { listNewDrives } from "../db/drive.ts";
 import { loadFullProfile } from "../db/profile.ts";
 import { loadAuthState } from "../db/secret.ts";
+import {
+  handlePrepareAskChoice,
+  handlePrepareAskText,
+  isPrepareAskActive,
+  startPrepareAsk,
+} from "../draft/askMissing.ts";
 import { prepareDrive, prepareReplyText } from "../draft/prepare.ts";
 import type { PlacementClient } from "../placement/client.ts";
 import {
@@ -133,7 +139,49 @@ async function isOnboardingActive(deps: HandleUpdateDeps): Promise<boolean> {
     return false;
   }
   const profile = await loadFullProfile(deps.db);
-  return Boolean(profile?.onboarding.step);
+  if (!profile) {
+    return false;
+  }
+  if (isPrepareAskActive(profile.onboarding)) {
+    return true;
+  }
+  return Boolean(profile.onboarding.step) && profile.onboarding.mode !== "prepare_ask";
+}
+
+async function runPrepare(
+  deps: HandleUpdateDeps,
+  driveId: string,
+  opts?: { skipAskGate?: boolean },
+): Promise<{ text: string; reason: string }> {
+  if (!deps.config || !deps.db) {
+    return { text: "Drafter not configured.", reason: "prepare_unconfigured" };
+  }
+  const result = await prepareDrive(
+    {
+      config: deps.config,
+      db: deps.db,
+      telegram: deps.telegram,
+      chatId: deps.allowedChatId,
+      fetch: deps.fetch,
+      log: deps.log,
+      skipAskGate: opts?.skipAskGate,
+    },
+    driveId,
+  );
+  if (result.kind === "need_answers") {
+    await startPrepareAsk(
+      {
+        db: deps.db,
+        telegram: deps.telegram,
+        chatId: deps.allowedChatId,
+        log: deps.log,
+      },
+      result.driveId,
+      result.fields,
+    );
+    return { text: prepareReplyText(result), reason: "prepare_need_answers" };
+  }
+  return { text: prepareReplyText(result), reason: `prepare_${result.kind}` };
 }
 
 export async function handleTelegramUpdate(
@@ -195,25 +243,32 @@ export async function handleTelegramUpdate(
       await handleGithubCallback(onboardingDeps(deps), decoded.action, decoded.index);
       return { handled: true, reason: `github_${decoded.action}` };
     }
-    if (decoded.kind === "prepare") {
-      await deps.telegram.answerCallbackQuery(callback.id, "Preparing…");
-      if (!deps.config || !deps.db) {
-        await deps.telegram.sendMessage(deps.allowedChatId, "Drafter not configured.");
+    if (decoded.kind === "ask") {
+      await deps.telegram.answerCallbackQuery(callback.id, "OK");
+      if (!deps.db || !deps.config) {
         return { handled: true, reason: "prepare_unconfigured" };
       }
-      const result = await prepareDrive(
+      const ask = await handlePrepareAskChoice(
         {
-          config: deps.config,
           db: deps.db,
           telegram: deps.telegram,
           chatId: deps.allowedChatId,
-          fetch: deps.fetch,
           log: deps.log,
         },
-        decoded.driveId,
+        decoded.optionIndex,
       );
-      await deps.telegram.sendMessage(deps.allowedChatId, prepareReplyText(result));
-      return { handled: true, reason: `prepare_${result.kind}` };
+      if (ask.kind === "complete") {
+        const prepared = await runPrepare(deps, ask.driveId, { skipAskGate: true });
+        await deps.telegram.sendMessage(deps.allowedChatId, prepared.text);
+        return { handled: true, reason: prepared.reason };
+      }
+      return { handled: true, reason: `ask_${ask.kind}` };
+    }
+    if (decoded.kind === "prepare") {
+      await deps.telegram.answerCallbackQuery(callback.id, "Preparing…");
+      const prepared = await runPrepare(deps, decoded.driveId);
+      await deps.telegram.sendMessage(deps.allowedChatId, prepared.text);
+      return { handled: true, reason: prepared.reason };
     }
     if (decoded.kind === "skip") {
       await deps.telegram.answerCallbackQuery(callback.id, "Skipping…");
@@ -291,6 +346,30 @@ export async function handleTelegramUpdate(
         }
         await deps.telegram.sendMessage(deps.allowedChatId, "That code did not work. Try again.");
         return { handled: true, reason: "otp_paste_failed" };
+      }
+    }
+
+    // prepare_ask consumes text before profile wizard / apply phrases.
+    if (deps.db && deps.config) {
+      const profile = await loadFullProfile(deps.db);
+      if (isPrepareAskActive(profile?.onboarding)) {
+        const ask = await handlePrepareAskText(
+          {
+            db: deps.db,
+            telegram: deps.telegram,
+            chatId: deps.allowedChatId,
+            log: deps.log,
+          },
+          text,
+        );
+        if (ask.kind === "complete") {
+          const prepared = await runPrepare(deps, ask.driveId, { skipAskGate: true });
+          await deps.telegram.sendMessage(deps.allowedChatId, prepared.text);
+          return { handled: true, reason: prepared.reason };
+        }
+        if (ask.kind !== "ignored") {
+          return { handled: true, reason: `ask_${ask.kind}` };
+        }
       }
     }
 

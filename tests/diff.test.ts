@@ -48,7 +48,9 @@ describe("normalizeTimestamp", () => {
 describe("diffCatalog", () => {
   it("inserts a new eligible _id as New", () => {
     const event = structuredClone(listFixture.events[0]!) as CatalogEvent;
-    const { actions } = diffCatalog([event], []);
+    // Use a now before the fixture deadline so we do not also mark Not Applied.
+    const now = new Date("2020-01-01T00:00:00.000Z");
+    const { actions } = diffCatalog([event], [], now);
     expect(actions).toEqual([
       expect.objectContaining({
         kind: "insert",

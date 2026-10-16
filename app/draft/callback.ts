@@ -1,10 +1,13 @@
 import { z } from "zod";
 import type { Config } from "../config.ts";
-import { hasTelegram, requireDraftCallbackSecret, requireTelegram } from "../config.ts";
+import { requireDraftCallbackSecret } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
 import { completeDraftReady, failDraft } from "../db/draft.ts";
 import { getDrive, setDraftStatus } from "../db/drive.ts";
 import { TelegramClient } from "../telegram/client.ts";
+import { hasTelegram, requireTelegram } from "../config.ts";
+import type { CompileDeps } from "./compile.ts";
+import { deliverReadyDraft } from "./deliver.ts";
 
 export const draftCallbackBodySchema = z.object({
   driveId: z.string().min(1),
@@ -28,6 +31,7 @@ export async function handleDraftCallback(input: {
   db: DbClient;
   body: DraftCallbackBody;
   fetch?: typeof globalThis.fetch;
+  compile?: CompileDeps;
   log?: {
     info?: (obj: Record<string, unknown>, msg?: string) => void;
     warn?: (obj: Record<string, unknown>, msg?: string) => void;
@@ -65,11 +69,16 @@ export async function handleDraftCallback(input: {
     return { status: 409, body: { error: "not_pending" } };
   }
   await setDraftStatus(input.db, drive.id, "ready", now);
-  const company = drive.company_name?.trim() || drive.id;
-  await notifyTelegram(
-    input,
-    `Draft ready for ${company}. Delivery in a later update.`,
-  );
+
+  await deliverReadyDraft({
+    config: input.config,
+    db: input.db,
+    fetch: input.fetch,
+    compile: input.compile,
+    log: input.log,
+    now,
+  }, drive.id);
+
   input.log?.info?.({ driveId: drive.id, answerCount: input.body.answers?.length ?? 0 }, "draft ready");
   return { status: 200, body: { ok: true, status: "ready" } };
 }

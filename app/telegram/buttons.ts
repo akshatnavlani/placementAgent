@@ -6,7 +6,8 @@ export type CallbackDecoded =
   | { kind: DriveCallbackKind; driveId: string }
   | { kind: "approve" }
   | { kind: "profile"; action: ProfileCallbackAction }
-  | { kind: "github"; action: "ok" | "no"; index: number };
+  | { kind: "github"; action: "ok" | "no"; index: number }
+  | { kind: "ask"; optionIndex: number };
 
 export function encodeCallback(kind: DriveCallbackKind, driveId: string): string {
   const prefix = kind === "prepare" ? "p" : kind === "applied" ? "a" : "s";
@@ -28,6 +29,10 @@ export function decodeCallback(data: string): CallbackDecoded | null {
   const github = /^g:(ok|no):(\d+)$/.exec(data);
   if (github) {
     return { kind: "github", action: github[1] as "ok" | "no", index: Number(github[2]) };
+  }
+  const ask = /^ask:(\d+)$/.exec(data);
+  if (ask) {
+    return { kind: "ask", optionIndex: Number(ask[1]) };
   }
   const match = /^(p|a|s):(.+)$/.exec(data);
   if (!match) {
@@ -85,4 +90,15 @@ export function chooseSkipDriveKeyboard(
       },
     ]),
   };
+}
+
+/** Dropdown options for prepare_ask (indices into field.options). */
+export function askChoiceKeyboard(options: string[]): Record<string, unknown> {
+  const rows = options.slice(0, 20).map((opt, i) => [
+    {
+      text: opt.slice(0, 40),
+      callback_data: `ask:${i}`,
+    },
+  ]);
+  return { inline_keyboard: rows };
 }

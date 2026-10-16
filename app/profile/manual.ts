@@ -30,14 +30,24 @@ export type GithubPending = {
   summary: string;
 };
 
+export type PrepareAskField = {
+  label: string;
+  type: string | null;
+  options: string[];
+};
+
 export type OnboardingState = {
   step?: string;
   expect?: string;
-  mode?: "fresh" | "redo" | "latex" | "github";
+  mode?: "fresh" | "redo" | "latex" | "github" | "prepare_ask";
   draft_manual?: ManualProfile;
   draft_latex?: string;
   github_pending?: GithubPending[];
   github_queue?: string[];
+  /** M10: ask missing required customFields before Prepare webhook. */
+  driveId?: string;
+  ask_fields?: PrepareAskField[];
+  ask_index?: number;
 };
 
 export function emptyManual(): ManualProfile {
@@ -94,7 +104,11 @@ export function asOnboarding(value: unknown): OnboardingState {
     step: typeof raw.step === "string" ? raw.step : undefined,
     expect: typeof raw.expect === "string" ? raw.expect : undefined,
     mode:
-      raw.mode === "fresh" || raw.mode === "redo" || raw.mode === "latex" || raw.mode === "github"
+      raw.mode === "fresh" ||
+      raw.mode === "redo" ||
+      raw.mode === "latex" ||
+      raw.mode === "github" ||
+      raw.mode === "prepare_ask"
         ? raw.mode
         : undefined,
     draft_manual: raw.draft_manual !== undefined ? asManual(raw.draft_manual) : undefined,
@@ -110,6 +124,20 @@ export function asOnboarding(value: unknown): OnboardingState {
       : undefined,
     github_queue: Array.isArray(raw.github_queue)
       ? raw.github_queue.filter((u): u is string => typeof u === "string")
+      : undefined,
+    driveId: typeof raw.driveId === "string" ? raw.driveId : undefined,
+    ask_index: typeof raw.ask_index === "number" ? raw.ask_index : undefined,
+    ask_fields: Array.isArray(raw.ask_fields)
+      ? raw.ask_fields
+          .filter((f): f is Record<string, unknown> => !!f && typeof f === "object" && !Array.isArray(f))
+          .map((f) => ({
+            label: typeof f.label === "string" ? f.label : "",
+            type: typeof f.type === "string" ? f.type : null,
+            options: Array.isArray(f.options)
+              ? f.options.filter((o): o is string => typeof o === "string")
+              : [],
+          }))
+          .filter((f) => f.label)
       : undefined,
   };
 }

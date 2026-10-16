@@ -27,7 +27,6 @@ Redeploy after setting env. Local `.env` does not affect the live Telegram bot.
 
 1. Ensure `/profile` has stored canonical LaTeX.
 2. Tap **Prepare** on a drive alert.
-3. Expect Telegram “preparing.” then later “Draft ready for …”.
-4. Check Supabase `draft` row `status = ready` with latex + answers.
-
-If the webhook or callback fails, fix delivery before building M10 Telegram file send.
+3. If required questions lack answers, Telegram asks first; answer or `cancel`.
+4. Expect “preparing.” then “Draft ready for …”, an answers list, a `.tex` file, and a PDF when compile works (otherwise a short PDF-skipped note).
+5. Check Supabase `draft` row `status = ready`, `delivered_at` set, with latex + answers.

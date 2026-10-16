@@ -138,6 +138,11 @@ describe("handleDraftCallback", () => {
         answers: [{ label: "Why us?", value: "Growth" }],
       },
       fetch: fetchMock as unknown as typeof fetch,
+      compile: {
+        ensureTectonic: async () => {
+          throw new Error("skip tectonic in test");
+        },
+      },
     });
 
     expect(result.status).toBe(200);
@@ -145,6 +150,10 @@ describe("handleDraftCallback", () => {
     expect(drive.draft_status).toBe("ready");
     expect(drafts[0]?.status).toBe("ready");
     expect(drafts[0]?.latex).toContain("documentclass");
+    expect(drafts[0]?.delivered_at).toBeTruthy();
+    const sent = JSON.stringify(fetchMock.mock.calls);
+    expect(sent).not.toMatch(/later update/i);
+    expect(sent).toMatch(/Draft ready for Acme/);
   });
 
   it("rejects when not pending", async () => {

@@ -91,6 +91,75 @@ export class TelegramClient {
     });
   }
 
+  /**
+   * Send a file via multipart FormData. Do not set Content-Type (boundary).
+   */
+  async sendDocument(
+    chatId: string,
+    input: {
+      filename: string;
+      bytes: Uint8Array | Buffer;
+      contentType?: string;
+      caption?: string;
+    },
+  ): Promise<SendMessageResult> {
+    const started = Date.now();
+    const form = new FormData();
+    form.set("chat_id", chatId);
+    const file = new File([Uint8Array.from(input.bytes)], input.filename, {
+      type: input.contentType ?? "application/octet-stream",
+    });
+    form.set("document", file);
+    if (input.caption) {
+      form.set("caption", input.caption.slice(0, 1024));
+    }
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "network error";
+      this.log?.warn(
+        { method: "sendDocument", outcome: "network", durationMs: Date.now() - started },
+        "telegram call",
+      );
+      return { ok: false, reason };
+    }
+
+    let json: unknown;
+    try {
+      json = await response.json();
+    } catch {
+      this.log?.warn(
+        { method: "sendDocument", status: response.status, outcome: "invalid" },
+        "telegram call",
+      );
+      return { ok: false, reason: "non-json body" };
+    }
+
+    const obj = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+    if (obj.ok === true) {
+      const result = obj.result && typeof obj.result === "object" ? (obj.result as Record<string, unknown>) : {};
+      const messageId = typeof result.message_id === "number" ? result.message_id : 0;
+      this.log?.info(
+        { method: "sendDocument", status: response.status, outcome: "ok", durationMs: Date.now() - started },
+        "telegram call",
+      );
+      return { ok: true, messageId };
+    }
+
+    const description = typeof obj.description === "string" ? obj.description : `http ${response.status}`;
+    this.log?.warn(
+      { method: "sendDocument", status: response.status, outcome: "error", durationMs: Date.now() - started },
+      "telegram call",
+    );
+    return { ok: false, reason: description };
+  }
+
   /** Resolve a Telegram file_id to a download path. */
   async getFile(
     fileId: string,
