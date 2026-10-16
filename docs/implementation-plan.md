@@ -238,6 +238,11 @@ Regions: the placement API resolves to AWS `us-east-1`, so Render runs in Virgin
 
 Do not wire Telegram until this is solid. Silent persistence bugs become spam.
 
+**Live notes (M2)**
+
+- Compare `updated_at_platform` / `deadline` after normalizing to ISO; Postgres `timestamptz` round-trips (`Z` vs `+00:00`) must not force a refresh.
+- Unchanged polls touch `last_seen_at` only and do not re-fetch detail or PDFs.
+
 ---
 
 ### M3 — Telegram alerts

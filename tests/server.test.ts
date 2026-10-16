@@ -54,7 +54,8 @@ describe("POST /cron/poll", () => {
       headers: { authorization: `Bearer ${secret}` },
     });
     expect(res.statusCode).toBe(202);
-    expect(res.json()).toMatchObject({ accepted: true });
+    // Poll runs but placement/supabase are unset in this test config → ok:false alert.
+    expect(res.json()).toMatchObject({ accepted: true, poll: { ok: false } });
   });
 
   it("is not served over GET", async () => {

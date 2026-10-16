@@ -14,6 +14,26 @@ export function sanitizePlatformSnapshot(platform: Record<string, unknown>): Rec
   return out;
 }
 
+export async function loadPlatformProfile(
+  db: DbClient,
+): Promise<{ studentId: string; platform: Record<string, unknown> } | null> {
+  const { data, error } = await db
+    .from("profile")
+    .select("student_id, platform")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`profile load failed: ${error.message}`);
+  }
+  if (!data) {
+    return null;
+  }
+  return {
+    studentId: String(data.student_id),
+    platform: (data.platform as Record<string, unknown>) ?? {},
+  };
+}
+
 /** Upserts the platform snapshot only. Never writes `manual`. */
 export async function upsertPlatformProfile(
   db: DbClient,

@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Config } from "./config.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
+import { runPoll } from "./poll/runPoll.ts";
 
 export function buildServer(config: Config): FastifyInstance {
   const app = Fastify({ logger: loggerOptions(config.LOG_LEVEL), trustProxy: true });
@@ -21,7 +22,17 @@ export function buildServer(config: Config): FastifyInstance {
         }
       },
     },
-    async (_request, reply) => reply.code(202).send({ accepted: true, poll: "stub" }),
+    async (request, reply) => {
+      const poll = await runPoll({
+        config,
+        log: {
+          info: (obj, msg) => request.log.info(obj, msg),
+          warn: (obj, msg) => request.log.warn(obj, msg),
+          error: (obj, msg) => request.log.error(obj, msg),
+        },
+      });
+      return reply.code(202).send({ accepted: true, poll });
+    },
   );
 
   return app;
