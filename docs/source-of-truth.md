@@ -413,7 +413,7 @@ Suggested tables, not a migration:
 
 | Table | Holds |
 |---|---|
-| `profile` | Platform snapshot and manual facts, in separate columns or JSON sections so a sync cannot overwrite JEE or a project you typed |
+| `profile` | Platform snapshot and manual facts (sync never overwrites manual), `canonical_latex`, `onboarding` wizard state |
 | `secret` | Bearer token and its replacement time. Password stays in Render’s environment, not in a row. |
 | `drive` | Raw list JSON, raw detail JSON, extracted PDF text, `pdfUrls`, `isEligible`, status, deadline, `reminder_sent`, `applied_at`, `last_apply_check_at`, Notion page id, draft status |
 | `answer` | Normalized question label, value, whether you approved it, whether it is reusable or drive-specific |
