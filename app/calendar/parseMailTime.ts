@@ -74,9 +74,7 @@ function nextWeekday(from: Date, targetDow: number): { y: number; m: number; day
   if (delta === 0) {
     delta = 7;
   }
-  const base = Date.UTC(p.y, p.m - 1, p.day) + delta * DAY_MS;
-  const d = new Date(base);
-  // Use UTC y/m/d of that midnight UTC as approx; refine via IST parts of noon UTC that day
+  // Noon UTC offset approximates IST midday for that calendar delta
   const noon = new Date(Date.UTC(p.y, p.m - 1, p.day, 6, 30) + delta * DAY_MS);
   const np = istParts(noon);
   return { y: np.y, m: np.m, day: np.day };
