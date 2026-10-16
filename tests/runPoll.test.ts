@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../app/config.ts";
 import type { DriveRow } from "../app/db/drive.ts";
+import { NotionClient } from "../app/notion/client.ts";
 import { PlacementClient, type CatalogEvent } from "../app/placement/client.ts";
 import { runPoll } from "../app/poll/runPoll.ts";
 
@@ -361,5 +362,82 @@ describe("runPoll", () => {
     expect(result.inserted).toBe(1);
     expect(rows.has(event._id)).toBe(true);
     expect(rows.get(event._id)?.status).toBe("New");
+    expect(result.alerts).toContain("notion_skipped");
+    expect(result.notionSynced).toBe(0);
+  });
+
+  it("syncs Notion on eligible insert and skips on touch", async () => {
+    const event = structuredClone(listFixture.events[0]!) as CatalogEvent;
+    event.deadline = "2099-01-01T00:00:00.000Z";
+    event.pdfUrls = [];
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("getEventsByStudentEligibility")) {
+        return new Response(JSON.stringify({ success: true, events: [event] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("getEventDetails")) {
+        return new Response(JSON.stringify({ ...event, formattedEventDate: null }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("no", { status: 404 });
+    });
+
+    const notionFetch = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "notion-page-1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const notion = new NotionClient({
+      token: "notion-test-token",
+      fetch: notionFetch as unknown as typeof fetch,
+    });
+
+    const config = {
+      ...baseConfig,
+      NOTION_TOKEN: "notion-test-token",
+      NOTION_DATABASE_ID: "11b47a447b504720ac1b32d6ceaee46c",
+    } as Config;
+
+    const { db, rows } = memoryStore([]);
+    const placement = new PlacementClient({ fetch: fetchMock as unknown as typeof fetch });
+    const first = await runPoll({
+      config,
+      db,
+      placement,
+      notify: false,
+      fetch: fetchMock as unknown as typeof fetch,
+      listExisting: async () => [...rows.values()],
+      now: new Date("2026-01-02T00:00:00.000Z"),
+      notion,
+    });
+
+    expect(first.ok).toBe(true);
+    expect(first.inserted).toBe(1);
+    expect(first.notionSynced).toBe(1);
+    expect(rows.get(event._id)?.notion_page_id).toBe("notion-page-1");
+    expect(notionFetch).toHaveBeenCalled();
+
+    const notionCallsAfterInsert = notionFetch.mock.calls.length;
+    const second = await runPoll({
+      config,
+      db,
+      placement,
+      notify: false,
+      fetch: fetchMock as unknown as typeof fetch,
+      listExisting: async () => [...rows.values()],
+      now: new Date("2026-01-02T00:05:00.000Z"),
+      notion,
+    });
+    expect(second.ok).toBe(true);
+    expect(second.touched).toBe(1);
+    expect(second.notionSynced).toBe(0);
+    expect(notionFetch.mock.calls.length).toBe(notionCallsAfterInsert);
   });
 });

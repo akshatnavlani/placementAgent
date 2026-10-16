@@ -467,6 +467,8 @@ No event-id property. No eligibility property. Ineligible drives have no card.
 
 If a Notion write fails, Supabase still has the drive, and a later poll retries the card. If you edit a later-stage status by hand, the poll must not revert it.
 
+**Live notes (M4):** Title is `company — role`. Stipend/CTC read the first amount from compensation arrays when present. Rounds accept either `selection` or `selections[]`. Watcher Status writes are only New / Applied / Not Applied; later stages on the board are left alone on update.
+
 ---
 
 ## 10. Drafter

@@ -3,17 +3,20 @@ import type { DriveRow } from "../db/drive.ts";
 const IST = "Asia/Kolkata";
 export const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
-function asRecord(value: unknown): Record<string, unknown> | null {
+export function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
   return value as Record<string, unknown>;
 }
 
-function pickString(...values: unknown[]): string | null {
+export function pickString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === "string" && value.trim() !== "") {
       return value.trim();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
     }
   }
   return null;
@@ -34,28 +37,55 @@ function formatDeadlineIst(deadlineIso: string | null): string | null {
   }).format(new Date(ms));
 }
 
-function compensation(jobInfo: Record<string, unknown> | null): { stipend: string | null; ctc: string | null } {
+function firstCompensationAmount(value: unknown): string | null {
+  if (typeof value === "string" && value.trim() !== "") {
+    return value.trim();
+  }
+  if (typeof value === "number" && Number.isFinite(value) && value !== 0) {
+    return String(value);
+  }
+  const record = asRecord(value);
+  if (record) {
+    return pickString(record.amount, record.value) ?? firstCompensationAmount(record.amount);
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    return firstCompensationAmount(value[0]);
+  }
+  return null;
+}
+
+/** Shared with Notion map — compensation may be an object or a non-empty array. */
+export function compensation(jobInfo: Record<string, unknown> | null): {
+  stipend: string | null;
+  ctc: string | null;
+} {
   if (!jobInfo) {
     return { stipend: null, ctc: null };
   }
-  const internship = asRecord(jobInfo.internshipCompensation);
-  const fte = asRecord(jobInfo.fteCompensation);
-  const stipend = pickString(
-    internship?.amount,
-    internship?.value,
-    jobInfo.internshipStipend,
-    typeof jobInfo.internshipCompensation === "string" ? jobInfo.internshipCompensation : null,
-  );
-  const ctc = pickString(
-    fte?.amount,
-    fte?.value,
-    jobInfo.ctc,
-    typeof jobInfo.fteCompensation === "string" ? jobInfo.fteCompensation : null,
-  );
+  const stipend =
+    firstCompensationAmount(jobInfo.internshipCompensation) ??
+    firstCompensationAmount(jobInfo.internshipStipend);
+  const ctc =
+    firstCompensationAmount(jobInfo.fteCompensation) ?? firstCompensationAmount(jobInfo.ctc);
   return { stipend, ctc };
 }
 
-function roundsText(source: Record<string, unknown> | null): string | null {
+function selectionLabel(round: Record<string, unknown>): string | null {
+  const direct = pickString(round.selection, round.type, round.mode);
+  if (direct) {
+    return direct;
+  }
+  if (Array.isArray(round.selections) && round.selections.length > 0) {
+    const parts = round.selections.filter((item): item is string => typeof item === "string" && item.trim() !== "");
+    if (parts.length > 0) {
+      return parts.join(", ");
+    }
+  }
+  return null;
+}
+
+/** Shared with Notion map — rounds may use `selection` or `selections[]`. */
+export function roundsText(source: Record<string, unknown> | null): string | null {
   if (!source) {
     return null;
   }
@@ -71,7 +101,7 @@ function roundsText(source: Record<string, unknown> | null): string | null {
       continue;
     }
     const name = pickString(r.name, r.roundName, r.title);
-    const selection = pickString(r.selection, r.type, r.mode);
+    const selection = selectionLabel(r);
     if (name && selection) {
       parts.push(`${name} (${selection})`);
     } else if (name) {

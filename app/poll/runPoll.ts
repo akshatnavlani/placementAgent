@@ -1,5 +1,12 @@
 import type { Config } from "../config.ts";
-import { hasTelegram, requirePlacementCredentials, requireSupabase, requireTelegram } from "../config.ts";
+import {
+  hasNotion,
+  hasTelegram,
+  requireNotion,
+  requirePlacementCredentials,
+  requireSupabase,
+  requireTelegram,
+} from "../config.ts";
 import { createDbClient, type DbClient } from "../db/client.ts";
 import {
   getDrive,
@@ -13,6 +20,8 @@ import {
 } from "../db/drive.ts";
 import { loadPlatformProfile } from "../db/profile.ts";
 import { clearBearerToken, loadBearerToken } from "../db/secret.ts";
+import { NotionClient } from "../notion/client.ts";
+import { syncEligibleDrives } from "../notion/sync.ts";
 import { PlacementClient, type CatalogEvent, type PlacementLogger } from "../placement/client.ts";
 import { buildEligibilityBody } from "../placement/eligibilityBody.ts";
 import { downloadPdf } from "../pdf/download.ts";
@@ -33,6 +42,7 @@ export type PollSummary = {
   detailsFetched: number;
   pdfsFetched: number;
   notified: number;
+  notionSynced: number;
 };
 
 export type PollLogger = PlacementLogger & {
@@ -50,8 +60,12 @@ export type RunPollDeps = {
   listExisting?: (db: DbClient) => Promise<DriveRow[]>;
   /** Test seam: inject Telegram client (skip real Bot API). */
   telegram?: TelegramClient;
+  /** Test seam: inject Notion client (skip real Notion API). */
+  notion?: NotionClient;
   /** When false, skip notify even if Telegram env is set. */
   notify?: boolean;
+  /** When false, skip Notion sync even if Notion env is set. */
+  notionSync?: boolean;
 };
 
 function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSummary {
@@ -64,6 +78,7 @@ function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSumm
     detailsFetched: 0,
     pdfsFetched: 0,
     notified: 0,
+    notionSynced: 0,
     ...partial,
   };
 }
@@ -168,6 +183,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   let detailsFetched = 0;
   let pdfsFetched = 0;
   let notified = 0;
+  let notionSynced = 0;
 
   const touchIds: string[] = [];
   const notAppliedIds: string[] = [];
@@ -232,14 +248,15 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   notApplied = notAppliedIds.length;
 
   const wantNotify = deps.notify !== false;
+  let telegramClient: TelegramClient | undefined = deps.telegram;
   if (wantNotify && notifyCandidates.length > 0) {
     if (!hasTelegram(deps.config)) {
       log?.warn({ alert: "telegram_skipped" }, "telegram env missing; persistence ok");
       alerts.push("telegram_skipped");
     } else {
       const tg = requireTelegram(deps.config);
-      const telegram =
-        deps.telegram ??
+      telegramClient =
+        telegramClient ??
         new TelegramClient({
           botToken: tg.botToken,
           fetch: fetchImpl,
@@ -255,7 +272,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
           continue;
         }
         const result = await notifyEligibleDrive(
-          { db, telegram, chatId: tg.chatId, now },
+          { db, telegram: telegramClient, chatId: tg.chatId, now },
           next,
         );
         if (result.ok) {
@@ -268,6 +285,45 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     }
   }
 
+  const wantNotion = deps.notionSync !== false;
+  if (wantNotion) {
+    if (!hasNotion(deps.config)) {
+      log?.warn({ alert: "notion_skipped" }, "notion env missing; persistence ok");
+      alerts.push("notion_skipped");
+    } else {
+      const notionCfg = requireNotion(deps.config);
+      const notion =
+        deps.notion ??
+        new NotionClient({
+          token: notionCfg.token,
+          fetch: fetchImpl,
+          log,
+        });
+      if (!telegramClient && hasTelegram(deps.config)) {
+        const tg = requireTelegram(deps.config);
+        telegramClient = new TelegramClient({
+          botToken: tg.botToken,
+          fetch: fetchImpl,
+          log,
+        });
+      }
+      const tgChatId = hasTelegram(deps.config) ? requireTelegram(deps.config).chatId : undefined;
+      const notionResult = await syncEligibleDrives({
+        db,
+        notion,
+        databaseId: notionCfg.databaseId,
+        now,
+        log,
+        telegram: telegramClient,
+        chatId: tgChatId,
+        candidateIds: notifyCandidates.map((a) => a.id),
+        notAppliedIds,
+      });
+      notionSynced = notionResult.synced;
+      alerts.push(...notionResult.alerts);
+    }
+  }
+
   log?.info(
     {
       inserted,
@@ -277,6 +333,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       detailsFetched,
       pdfsFetched,
       notified,
+      notionSynced,
       alertCount: alerts.length,
     },
     "poll complete",
@@ -292,6 +349,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     detailsFetched,
     pdfsFetched,
     notified,
+    notionSynced,
   };
 }
 

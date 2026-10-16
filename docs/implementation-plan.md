@@ -292,6 +292,14 @@ Do not wire Telegram until this is solid. Silent persistence bugs become spam.
 - Manual move of a card to Interview survives the next poll.
 - Failed Notion token produces a Telegram ops alert once, not a crash loop.
 
+**Live notes (M4)**
+
+- Raw Notion HTTPS client (`Notion-Version: 2022-06-28`); join via `drive.notion_page_id` only (no event-id property).
+- Sync after persist: eligible insert/refresh, Not Applied with a page id, and New eligible rows still missing a page id (pre-M4 backfill).
+- Status guard: when Supabase is New, retrieve Notion Status first; omit Status if Assessment / Interview / Accepted / Rejected.
+- Compensation arrays and `selections[]` on rounds are parsed the same way as Telegram alerts.
+- Auth failure → one Telegram ops alert per process lifetime; poll stays `ok`.
+
 ---
 
 ### M5 — Session renewal and OTP

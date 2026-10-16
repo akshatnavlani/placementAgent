@@ -243,3 +243,18 @@ export async function markAlerted(
     throw new Error(`drive markAlerted failed: ${error.message}`);
   }
 }
+
+export async function setNotionPageId(
+  db: DbClient,
+  id: string,
+  notionPageId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const { error } = await db
+    .from("drive")
+    .update({ notion_page_id: notionPageId, updated_at: now.toISOString() })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive setNotionPageId failed: ${error.message}`);
+  }
+}

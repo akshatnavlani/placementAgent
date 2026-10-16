@@ -14,6 +14,8 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
   TELEGRAM_ALLOWED_CHAT_ID: z.string().min(1).optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
+  NOTION_TOKEN: z.string().min(1).optional(),
+  NOTION_DATABASE_ID: z.string().min(1).optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -80,4 +82,27 @@ export function hasTelegram(config: Config): boolean {
   return Boolean(
     config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ALLOWED_CHAT_ID && config.TELEGRAM_WEBHOOK_SECRET,
   );
+}
+
+export function requireNotion(config: Config): {
+  token: string;
+  databaseId: string;
+} {
+  return {
+    token: requireVar(config, "NOTION_TOKEN"),
+    databaseId: normalizeNotionDatabaseId(requireVar(config, "NOTION_DATABASE_ID")),
+  };
+}
+
+export function hasNotion(config: Config): boolean {
+  return Boolean(config.NOTION_TOKEN && config.NOTION_DATABASE_ID);
+}
+
+/** Accept dashed or undashed UUIDs; Notion API accepts either. */
+export function normalizeNotionDatabaseId(raw: string): string {
+  const hex = raw.replace(/[^a-fA-F0-9]/g, "");
+  if (hex.length === 32) {
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return raw.trim();
 }
