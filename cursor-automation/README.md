@@ -7,9 +7,8 @@ The watcher does not create the automation. You create it once in Cursor, then p
 1. In Cursor, create a **Cloud Agent / Automation** with a **webhook** trigger.
 2. Paste the contents of [`DRAFTER.md`](./DRAFTER.md) into the automation instructions.
 3. Choose the cloud-agent model from your plan.
-4. Set automation env:
-   - `DRAFT_CALLBACK_SECRET` — same ≥32-char secret as Render
-5. Copy the webhook URL Cursor gives you.
+4. Save the automation, then copy the **webhook URL** and the **API key** Cursor shows (inbound auth for callers).
+5. You do **not** set `DRAFT_CALLBACK_SECRET` in Cursor — Automations have no secrets UI for that. The watcher sends `callbackSecret` inside each Prepare payload; the agent uses it as `Authorization: Bearer …` when POSTing `/draft/callback`.
 
 ## 2. Render env
 
@@ -18,11 +17,11 @@ On the watcher service (`pesu-placement-watcher`):
 | Variable | Value |
 |---|---|
 | `CURSOR_WEBHOOK_URL` | Webhook URL from step 1 |
-| `CURSOR_WEBHOOK_SECRET` | Optional Bearer secret if Cursor requires one on inbound webhook |
-| `DRAFT_CALLBACK_SECRET` | Shared secret (≥32) for `POST /draft/callback` |
+| `CURSOR_WEBHOOK_SECRET` | Cursor’s webhook **API key** (Bearer for inbound POST). Same as what you put in local `.env` if you copied it. |
+| `DRAFT_CALLBACK_SECRET` | Shared secret (≥32) you invent once — Render only; also mirrored into each Prepare payload as `callbackSecret` |
 | `PUBLIC_BASE_URL` | `https://pesu-placement-watcher.onrender.com` |
 
-Redeploy after setting env.
+Redeploy after setting env. Local `.env` does not affect the live Telegram bot.
 
 ## 3. Smoke
 

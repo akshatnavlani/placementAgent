@@ -66,21 +66,28 @@ describe("extractCustomFields / unansweredRequired", () => {
   });
 });
 
+const callbackSecret = "draft-callback-secret-0123456789abcdef0123";
+
 describe("buildPreparePayload", () => {
-  it("builds a secret-free payload", () => {
+  it("builds a payload without placement secrets; includes callbackSecret for the agent", () => {
     const payload = buildPreparePayload({
       drive: drive(),
       facts,
       callbackUrl: "https://example.com/draft/callback",
+      callbackSecret,
     });
     expect(payload.driveId).toBe("drive-1");
     expect(payload.company).toBe("Acme");
     expect(payload.canonicalLatex).toContain("documentclass");
     expect(payload.unansweredRequired).toEqual(["Why us?"]);
+    expect(payload.callbackSecret).toBe(callbackSecret);
     expect(JSON.stringify(payload)).not.toMatch(/should-strip|bearerToken|nope/);
     expect(payload.profile.platform).toEqual({ name: "Ada", department: "CSE" });
     const keys = preparePayloadLogKeys(payload);
     expect(keys.keys).toContain("callbackUrl");
+    expect(keys.keys).toContain("callbackSecret");
+    expect(keys.hasCallbackSecret).toBe(true);
+    expect(JSON.stringify(keys)).not.toContain(callbackSecret);
     expect(JSON.stringify(keys)).not.toContain("documentclass");
   });
 
@@ -90,6 +97,7 @@ describe("buildPreparePayload", () => {
         drive: drive(),
         facts: { ...facts, canonicalLatex: null },
         callbackUrl: "https://example.com/draft/callback",
+        callbackSecret,
       }),
     ).toThrow(/latex/i);
   });

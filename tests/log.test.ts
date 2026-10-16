@@ -25,6 +25,7 @@ describe("logger redaction", () => {
       "authorization",
       "refresh_token",
       "client_secret",
+      "callbackSecret",
     ]) {
       expect(redactPaths).toContain(key);
       expect(redactPaths).toContain(`*.${key}`);

@@ -227,6 +227,7 @@ describe("prepareDrive", () => {
     const joined = JSON.stringify(fetchMock.mock.calls);
     expect(joined).toContain("/draft/callback");
     expect(joined).toContain("d1");
+    expect(joined).toContain(baseConfig.DRAFT_CALLBACK_SECRET);
   });
 
   it("marks failed on webhook error", async () => {

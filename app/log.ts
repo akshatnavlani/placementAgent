@@ -13,6 +13,7 @@ const sensitiveKeys = [
   "refresh_token",
   "access_token",
   "client_secret",
+  "callbackSecret",
 ];
 
 export const redactPaths = [

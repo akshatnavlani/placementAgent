@@ -28,6 +28,8 @@ export type PreparePayload = {
   };
   approvedAnswers: Array<{ label: string; value: string }>;
   callbackUrl: string;
+  /** Same value as Render DRAFT_CALLBACK_SECRET — Cursor Automations have no env UI. */
+  callbackSecret: string;
 };
 
 const SENSITIVE_KEY = /password|bearer|token|secret|authorization|otp|refresh/i;
@@ -119,10 +121,14 @@ export function buildPreparePayload(input: {
   drive: DriveRow;
   facts: DraftFacts;
   callbackUrl: string;
+  callbackSecret: string;
 }): PreparePayload {
-  const { drive, facts, callbackUrl } = input;
+  const { drive, facts, callbackUrl, callbackSecret } = input;
   if (!facts.canonicalLatex || facts.canonicalLatex.trim() === "") {
     throw new Error("canonical latex required");
+  }
+  if (!callbackSecret || callbackSecret.length < 32) {
+    throw new Error("callback secret required");
   }
   const detail = drive.raw_detail;
   const list = drive.raw_list;
@@ -150,10 +156,11 @@ export function buildPreparePayload(input: {
     },
     approvedAnswers: facts.answers,
     callbackUrl,
+    callbackSecret,
   };
 }
 
-/** Safe keys for logging — never log latex or answer values. */
+/** Safe keys for logging — never log latex, answers, or callbackSecret. */
 export function preparePayloadLogKeys(payload: PreparePayload): Record<string, unknown> {
   return {
     driveId: payload.driveId,
@@ -165,6 +172,7 @@ export function preparePayloadLogKeys(payload: PreparePayload): Record<string, u
     latexChars: payload.canonicalLatex.length,
     pdfUrlCount: Object.keys(payload.pdfText).length,
     callbackUrl: payload.callbackUrl,
+    hasCallbackSecret: Boolean(payload.callbackSecret),
     keys: Object.keys(payload).sort(),
   };
 }

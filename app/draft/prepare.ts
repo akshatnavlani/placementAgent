@@ -81,7 +81,12 @@ export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<
   const answers = await listApprovedReusable(deps.db);
   const facts = buildDraftFacts(profile, answers);
   const callbackUrl = `${cursor.publicBaseUrl}/draft/callback`;
-  const payload = buildPreparePayload({ drive, facts, callbackUrl });
+  const payload = buildPreparePayload({
+    drive,
+    facts,
+    callbackUrl,
+    callbackSecret: cursor.callbackSecret,
+  });
 
   await setDraftStatus(deps.db, driveId, "pending", now);
   await insertPendingDraft(deps.db, driveId, now);
