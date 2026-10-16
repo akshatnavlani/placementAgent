@@ -52,7 +52,8 @@ const baseProfile: FullProfile = {
     awards: ["Hackathon 1st"],
     certifications: ["Postman API"],
   },
-  canonicalLatex: null,
+  canonicalLatex:
+    "\\section{Technical Skills}\\textbf{Languages:} Python, Go\\textbf{Tools:} Docker",
   canonicalLatexUpdatedAt: null,
   onboarding: {},
 };
@@ -70,6 +71,7 @@ describe("preseedFromProfile", () => {
     expect(labels).toContain("Awards");
     expect(labels).toContain("Certifications");
     expect(labels).toContain("Awards & Certifications");
+    expect(labels).toContain("Technologies Known");
     expect(labels.join(" ")).not.toMatch(/phone|dob|birth/i);
     expect(rows.every((r) => !String(r.value).includes("999"))).toBe(true);
   });

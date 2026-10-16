@@ -1,3 +1,8 @@
+import {
+  extractSkillsFromLatex,
+  formatSkillsAnswer,
+  isTechnologyFieldLabel,
+} from "../profile/extractSkills.ts";
 import type { FullProfile } from "./profile.ts";
 import type { DbClient } from "./client.ts";
 
@@ -182,6 +187,12 @@ export async function preseedFromProfile(db: DbClient, profile: FullProfile): Pr
     seeds.push({ label: "Awards & Certifications", value: combined });
     seeds.push({ label: "Awards and Certifications", value: combined });
   }
+  const skills = formatSkillsAnswer(extractSkillsFromLatex(profile.canonicalLatex ?? ""));
+  if (skills) {
+    seeds.push({ label: "Technologies Known", value: skills });
+    seeds.push({ label: "Technical Skills", value: skills });
+    seeds.push({ label: "Skills", value: skills });
+  }
 
   let count = 0;
   for (const seed of seeds) {
@@ -217,6 +228,10 @@ export function suggestAnswerFromProfile(label: string, profile: FullProfile): s
   }
   if (hasCert && certs.length > 0) {
     return certs.join(", ");
+  }
+  if (isTechnologyFieldLabel(label)) {
+    const skills = formatSkillsAnswer(extractSkillsFromLatex(profile.canonicalLatex ?? ""));
+    return skills || null;
   }
   return null;
 }
