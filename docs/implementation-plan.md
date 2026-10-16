@@ -428,6 +428,13 @@ M0–M7 green means you have a usable catalog + alert + apply-verify system with
 - Canonical LaTeX round-trips after a Render restart.
 - Unapproved GitHub summary is not in the draft payload.
 
+**Live notes (M8)**
+
+- `/profile` re-runnable: wizard or summary menu (Redo all / Replace LaTeX / Add GitHub); `cancel` aborts; **Looks good** commits.
+- `profile.canonical_latex` + `onboarding` jsonb; `answer` table with reusable global unique label.
+- `buildDraftFacts` / `profileReadyForDraft` strip phone/DOB; omit unapproved GitHub; LaTeX is the hard gate for Prepare.
+- Pre-seed skips overwriting existing approved answers.
+
 ---
 
 ### M9 — Cursor drafter

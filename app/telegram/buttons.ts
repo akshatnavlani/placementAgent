@@ -1,8 +1,12 @@
 export type DriveCallbackKind = "prepare" | "applied" | "skip";
 
+export type ProfileCallbackAction = "redo" | "latex" | "github" | "ok";
+
 export type CallbackDecoded =
   | { kind: DriveCallbackKind; driveId: string }
-  | { kind: "approve" };
+  | { kind: "approve" }
+  | { kind: "profile"; action: ProfileCallbackAction }
+  | { kind: "github"; action: "ok" | "no"; index: number };
 
 export function encodeCallback(kind: DriveCallbackKind, driveId: string): string {
   const prefix = kind === "prepare" ? "p" : kind === "applied" ? "a" : "s";
@@ -16,6 +20,14 @@ export function encodeCallback(kind: DriveCallbackKind, driveId: string): string
 export function decodeCallback(data: string): CallbackDecoded | null {
   if (data === "ok") {
     return { kind: "approve" };
+  }
+  const profile = /^prof:(redo|latex|github|ok)$/.exec(data);
+  if (profile) {
+    return { kind: "profile", action: profile[1] as ProfileCallbackAction };
+  }
+  const github = /^g:(ok|no):(\d+)$/.exec(data);
+  if (github) {
+    return { kind: "github", action: github[1] as "ok" | "no", index: Number(github[2]) };
   }
   const match = /^(p|a|s):(.+)$/.exec(data);
   if (!match) {

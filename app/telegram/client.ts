@@ -90,4 +90,59 @@ export class TelegramClient {
       show_alert: false,
     });
   }
+
+  /** Resolve a Telegram file_id to a download path. */
+  async getFile(
+    fileId: string,
+  ): Promise<{ ok: true; filePath: string } | { ok: false; reason: string }> {
+    const started = Date.now();
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`https://api.telegram.org/bot${this.botToken}/getFile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ file_id: fileId }),
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "network error";
+      this.log?.warn({ method: "getFile", outcome: "network", durationMs: Date.now() - started }, "telegram call");
+      return { ok: false, reason };
+    }
+    let json: unknown;
+    try {
+      json = await response.json();
+    } catch {
+      return { ok: false, reason: "non-json body" };
+    }
+    const obj = json && typeof json === "object" ? (json as Record<string, unknown>) : {};
+    if (obj.ok !== true) {
+      return { ok: false, reason: typeof obj.description === "string" ? obj.description : "getFile failed" };
+    }
+    const result = obj.result && typeof obj.result === "object" ? (obj.result as Record<string, unknown>) : {};
+    const filePath = typeof result.file_path === "string" ? result.file_path : "";
+    if (!filePath) {
+      return { ok: false, reason: "missing file_path" };
+    }
+    return { ok: true, filePath };
+  }
+
+  async downloadFile(
+    filePath: string,
+  ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false; reason: string }> {
+    try {
+      const response = await this.fetchImpl(
+        `https://api.telegram.org/file/bot${this.botToken}/${filePath}`,
+        { signal: AbortSignal.timeout(60_000) },
+      );
+      if (!response.ok) {
+        return { ok: false, reason: `http ${response.status}` };
+      }
+      const buf = new Uint8Array(await response.arrayBuffer());
+      return { ok: true, bytes: buf };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "network error";
+      return { ok: false, reason };
+    }
+  }
 }

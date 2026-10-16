@@ -53,6 +53,26 @@ function applyStore(seed: DriveRow[]) {
   const rows = new Map(seed.map((r) => [r.id, structuredClone(r)]));
   const db = {
     from(table: string) {
+      if (table === "profile") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  student_id: "PES1UG00FAKE",
+                  platform: {},
+                  platform_synced_at: null,
+                  manual: {},
+                  canonical_latex: null,
+                  canonical_latex_updated_at: null,
+                  onboarding: {},
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
       if (table === "drive") {
         return {
           select: () => ({

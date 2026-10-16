@@ -71,6 +71,26 @@ function applyStore(seed: DriveRow[]) {
           }),
         };
       }
+      if (table === "profile") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  student_id: "PES1UG00FAKE",
+                  platform: {},
+                  platform_synced_at: null,
+                  manual: {},
+                  canonical_latex: null,
+                  canonical_latex_updated_at: null,
+                  onboarding: {},
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
       if (table === "drive") {
         return {
           select: () => ({

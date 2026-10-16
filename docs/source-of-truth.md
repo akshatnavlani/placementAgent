@@ -281,6 +281,8 @@ Match mail to a stored drive by company and role. If two drives match, or none d
 4. GitHub links for projects missing from the resume are summarized for you to accept before they enter the profile or a draft.
 5. Never fill a gap with a plausible achievement.
 
+**Live notes (M8):** Telegram `/profile` (also `profile`) is re-runnable anytime: empty → wizard; existing → summary with Redo all / Replace LaTeX / Add GitHub. Wizard buffers edits until **Looks good**; `cancel` aborts. Canonical resume is `.tex` upload or paste into `profile.canonical_latex` (PDF rejected). Incomplete manual fields stay blank; Prepare (M9) only hard-requires LaTeX. Answer bank table pre-seeds from platform+manual without phone/DOB.
+
 ---
 
 ## 6. Placement API
@@ -443,6 +445,7 @@ Official Bot API. The bot may message only the chat id captured when you start i
 | New drive: company, role, deadline in IST, location, stipend or CTC, rounds | Prepare. I applied. Skip. |
 | “Deadline is close” on first sight inside 6 hours | Same |
 | One reminder under 6 hours | Prepare. I applied. Skip. |
+| `/profile` summary or wizard | Redo all. Replace LaTeX. Add GitHub. Looks good. cancel / skip |
 | “Preparing” | Wait |
 | Draft: answers plus PDF or LaTeX | Apply yourself in the official app, then tap I applied |
 | “Platform shows no application” or “could not verify” | Apply or retry I applied |
