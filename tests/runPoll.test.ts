@@ -160,6 +160,7 @@ describe("runPoll", () => {
         event_name: null,
         first_seen_at: "2026-01-01T00:00:00.000Z",
         last_seen_at: "2026-01-01T00:00:00.000Z",
+        alerted_at: "2026-01-01T00:00:00.000Z",
       },
     ];
     const { db, rows, ops } = memoryStore(seed);
@@ -171,6 +172,7 @@ describe("runPoll", () => {
       config: baseConfig,
       db,
       placement,
+      notify: false,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
     });
@@ -202,6 +204,7 @@ describe("runPoll", () => {
         event_name: null,
         first_seen_at: "2026-01-01T00:00:00.000Z",
         last_seen_at: "2026-01-01T00:00:00.000Z",
+        alerted_at: "2026-01-01T00:00:00.000Z",
       },
     ]);
     const placement = new PlacementClient({
@@ -217,6 +220,7 @@ describe("runPoll", () => {
       config: baseConfig,
       db,
       placement,
+      notify: false,
       listExisting: async () => [...rows.values()],
     });
     expect(result.ok).toBe(false);
@@ -283,6 +287,7 @@ describe("runPoll", () => {
       event_name: null,
       first_seen_at: "2026-01-01T00:00:00.000Z",
       last_seen_at: "2026-01-01T00:00:00.000Z",
+      alerted_at: "2026-01-01T00:00:00.000Z",
     };
 
     const { db, rows } = memoryStore([seeded]);
@@ -292,6 +297,7 @@ describe("runPoll", () => {
       config: baseConfig,
       db,
       placement,
+      notify: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -304,6 +310,7 @@ describe("runPoll", () => {
       config: baseConfig,
       db,
       placement,
+      notify: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:05:00.000Z"),
@@ -344,6 +351,7 @@ describe("runPoll", () => {
       config: baseConfig,
       db,
       placement,
+      notify: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),

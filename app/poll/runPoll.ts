@@ -1,7 +1,8 @@
 import type { Config } from "../config.ts";
-import { requirePlacementCredentials, requireSupabase } from "../config.ts";
+import { hasTelegram, requirePlacementCredentials, requireSupabase, requireTelegram } from "../config.ts";
 import { createDbClient, type DbClient } from "../db/client.ts";
 import {
+  getDrive,
   listDrives,
   markNotApplied,
   setDetail,
@@ -16,6 +17,9 @@ import { PlacementClient, type CatalogEvent, type PlacementLogger } from "../pla
 import { buildEligibilityBody } from "../placement/eligibilityBody.ts";
 import { downloadPdf } from "../pdf/download.ts";
 import { extractPdfText } from "../pdf/extract.ts";
+import { TelegramClient } from "../telegram/client.ts";
+import { shouldAlert } from "../telegram/dedup.ts";
+import { notifyEligibleDrive } from "../telegram/notify.ts";
 import { diffCatalog, eventDisplayFields, extractPdfUrls, type DiffAction } from "./diff.ts";
 
 export type PollSummary = {
@@ -28,6 +32,7 @@ export type PollSummary = {
   notApplied: number;
   detailsFetched: number;
   pdfsFetched: number;
+  notified: number;
 };
 
 export type PollLogger = PlacementLogger & {
@@ -43,6 +48,10 @@ export type RunPollDeps = {
   now?: Date;
   /** Test seam: override existing drives instead of reading Supabase. */
   listExisting?: (db: DbClient) => Promise<DriveRow[]>;
+  /** Test seam: inject Telegram client (skip real Bot API). */
+  telegram?: TelegramClient;
+  /** When false, skip notify even if Telegram env is set. */
+  notify?: boolean;
 };
 
 function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSummary {
@@ -54,6 +63,7 @@ function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSumm
     notApplied: 0,
     detailsFetched: 0,
     pdfsFetched: 0,
+    notified: 0,
     ...partial,
   };
 }
@@ -157,9 +167,11 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   let notApplied = 0;
   let detailsFetched = 0;
   let pdfsFetched = 0;
+  let notified = 0;
 
   const touchIds: string[] = [];
   const notAppliedIds: string[] = [];
+  const notifyCandidates: DiffAction[] = [];
 
   for (const action of actions) {
     if (action.kind === "touch") {
@@ -174,6 +186,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     if (!action.event) {
       continue;
     }
+    const prior = existingById.get(action.id);
     await applyListUpsert(db, action, now);
     if (action.kind === "insert") {
       inserted += 1;
@@ -182,17 +195,15 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     }
 
     const urls = extractPdfUrls(action.event);
-    let detail: CatalogEvent | Record<string, unknown> = action.event;
 
     if (action.fetchDetail) {
       const detailOutcome = await placement.getEventDetails(secret.bearerToken, action.id);
       if (detailOutcome.kind === "ok") {
-        detail = detailOutcome.data;
+        const detail = detailOutcome.data;
         await setDetail(db, action.id, detail as Record<string, unknown>, now);
         detailsFetched += 1;
         const detailUrls = extractPdfUrls(detail);
         if (detailUrls.length > 0) {
-          // Prefer detail URL set when present.
           for (const url of detailUrls) {
             if (!urls.includes(url)) {
               urls.push(url);
@@ -205,7 +216,6 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       }
     }
 
-    const prior = existingById.get(action.id);
     const priorText = prior?.pdf_text ?? {};
     const pdfResult = await ensurePdfs(action.id, urls, priorText, fetchImpl, log);
     alerts.push(...pdfResult.alerts);
@@ -213,11 +223,50 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     if (pdfResult.fetched > 0 || urls.join("\0") !== (prior?.pdf_urls ?? []).join("\0")) {
       await setPdfText(db, action.id, urls, pdfResult.pdfText, now);
     }
+
+    notifyCandidates.push(action);
   }
 
   await touchLastSeen(db, touchIds, now);
   await markNotApplied(db, notAppliedIds, now);
   notApplied = notAppliedIds.length;
+
+  const wantNotify = deps.notify !== false;
+  if (wantNotify && notifyCandidates.length > 0) {
+    if (!hasTelegram(deps.config)) {
+      log?.warn({ alert: "telegram_skipped" }, "telegram env missing; persistence ok");
+      alerts.push("telegram_skipped");
+    } else {
+      const tg = requireTelegram(deps.config);
+      const telegram =
+        deps.telegram ??
+        new TelegramClient({
+          botToken: tg.botToken,
+          fetch: fetchImpl,
+          log,
+        });
+      for (const action of notifyCandidates) {
+        const previous = existingById.get(action.id);
+        const next = await getDrive(db, action.id);
+        if (!next) {
+          continue;
+        }
+        if (!shouldAlert({ action, previous, next })) {
+          continue;
+        }
+        const result = await notifyEligibleDrive(
+          { db, telegram, chatId: tg.chatId, now },
+          next,
+        );
+        if (result.ok) {
+          notified += 1;
+        } else {
+          alerts.push(`telegram_send:${action.id}`);
+          log?.warn({ driveId: action.id, reason: result.reason }, "telegram notify failed");
+        }
+      }
+    }
+  }
 
   log?.info(
     {
@@ -227,6 +276,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       notApplied,
       detailsFetched,
       pdfsFetched,
+      notified,
       alertCount: alerts.length,
     },
     "poll complete",
@@ -241,6 +291,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     notApplied,
     detailsFetched,
     pdfsFetched,
+    notified,
   };
 }
 

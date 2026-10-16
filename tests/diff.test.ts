@@ -30,6 +30,7 @@ function row(partial: Partial<DriveRow> & { id: string }): DriveRow {
     event_name: null,
     first_seen_at: "2026-01-01T00:00:00.000Z",
     last_seen_at: "2026-01-01T00:00:00.000Z",
+    alerted_at: null,
     ...partial,
   };
 }

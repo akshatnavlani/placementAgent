@@ -6,11 +6,14 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   CRON_SHARED_SECRET: z.string().min(32),
   RENDER_GIT_COMMIT: z.string().optional(),
-  // Optional until M2 makes them required for the poll. /health still boots without them.
+  // Optional until used. /health still boots without them.
   PLACEMENT_STUDENT_ID: z.string().min(1).optional(),
   PLACEMENT_PASSWORD: z.string().min(1).optional(),
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  TELEGRAM_ALLOWED_CHAT_ID: z.string().min(1).optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -59,4 +62,22 @@ export function requireSupabase(config: Config): {
     url: requireVar(config, "SUPABASE_URL"),
     serviceRoleKey: requireVar(config, "SUPABASE_SERVICE_ROLE_KEY"),
   };
+}
+
+export function requireTelegram(config: Config): {
+  botToken: string;
+  chatId: string;
+  webhookSecret: string;
+} {
+  return {
+    botToken: requireVar(config, "TELEGRAM_BOT_TOKEN"),
+    chatId: requireVar(config, "TELEGRAM_ALLOWED_CHAT_ID"),
+    webhookSecret: requireVar(config, "TELEGRAM_WEBHOOK_SECRET"),
+  };
+}
+
+export function hasTelegram(config: Config): boolean {
+  return Boolean(
+    config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ALLOWED_CHAT_ID && config.TELEGRAM_WEBHOOK_SECRET,
+  );
 }

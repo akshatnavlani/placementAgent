@@ -28,6 +28,7 @@ export type DriveRow = {
   event_name: string | null;
   first_seen_at: string;
   last_seen_at: string;
+  alerted_at: string | null;
 };
 
 export type DriveUpsertFields = {
@@ -87,6 +88,7 @@ function mapRow(row: Record<string, unknown>): DriveRow {
     event_name: (row.event_name as string | null) ?? null,
     first_seen_at: String(row.first_seen_at),
     last_seen_at: String(row.last_seen_at),
+    alerted_at: (row.alerted_at as string | null) ?? null,
   };
 }
 
@@ -219,5 +221,25 @@ export async function markNotApplied(db: DbClient, ids: string[], now: Date = ne
     .eq("status", "New");
   if (error) {
     throw new Error(`drive markNotApplied failed: ${error.message}`);
+  }
+}
+
+export async function markAlerted(
+  db: DbClient,
+  id: string,
+  options: { reminderSent?: boolean } = {},
+  now: Date = new Date(),
+): Promise<void> {
+  const iso = now.toISOString();
+  const patch: Record<string, unknown> = {
+    alerted_at: iso,
+    updated_at: iso,
+  };
+  if (options.reminderSent === true) {
+    patch.reminder_sent = true;
+  }
+  const { error } = await db.from("drive").update(patch).eq("id", id);
+  if (error) {
+    throw new Error(`drive markAlerted failed: ${error.message}`);
   }
 }

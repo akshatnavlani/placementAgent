@@ -4,6 +4,7 @@ import type { Config } from "./config.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
 import { runPoll } from "./poll/runPoll.ts";
+import { registerTelegramWebhook } from "./telegram/webhook.ts";
 
 export function buildServer(config: Config): FastifyInstance {
   const app = Fastify({ logger: loggerOptions(config.LOG_LEVEL), trustProxy: true });
@@ -34,6 +35,8 @@ export function buildServer(config: Config): FastifyInstance {
       return reply.code(202).send({ accepted: true, poll });
     },
   );
+
+  registerTelegramWebhook(app, config);
 
   return app;
 }

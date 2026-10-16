@@ -13,7 +13,8 @@
     "dev": "node --env-file-if-exists=.env --watch app/main.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "placement:smoke": "node --env-file-if-exists=.env scripts/placement-smoke.ts"
+    "placement:smoke": "node --env-file-if-exists=.env scripts/placement-smoke.ts",
+    "telegram:set-webhook": "node --env-file-if-exists=.env scripts/telegram-set-webhook.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -264,6 +264,12 @@ Do not wire Telegram until this is solid. Silent persistence bugs become spam.
 - Ineligible rows produce no message.
 - Restarting the service does not re-send alerts for already-seen drives.
 
+**Live notes (M3)**
+
+- `drive.alerted_at` backfilled from `first_seen_at` so the pre-M3 catalog is not re-spammed.
+- Webhook: `POST /telegram/webhook` with `X-Telegram-Bot-Api-Secret-Token`; register via `npm run telegram:set-webhook`.
+- Prepare / I applied are stubs until M9 / M6.
+
 ---
 
 ### M4 — Notion sync
