@@ -154,7 +154,7 @@ export async function setCanonicalLatex(db: DbClient, latex: string, now: Date =
   const { error } = await db
     .from("profile")
     .update({
-      canonical_latex: latex,
+      canonical_latex: sanitizeForJsonb(latex),
       canonical_latex_updated_at: iso,
       updated_at: iso,
     })
@@ -164,14 +164,35 @@ export async function setCanonicalLatex(db: DbClient, latex: string, now: Date =
   }
 }
 
+/**
+ * Postgres jsonb rejects \\u0000. GitHub READMEs and pasted LaTeX can include it.
+ */
+export function sanitizeForJsonb<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(/\u0000/g, "") as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForJsonb(item)) as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = sanitizeForJsonb(child);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 export async function setOnboarding(
   db: DbClient,
   onboarding: OnboardingState,
   now: Date = new Date(),
 ): Promise<void> {
+  const safe = sanitizeForJsonb(onboarding);
   const { error } = await db
     .from("profile")
-    .update({ onboarding, updated_at: now.toISOString() })
+    .update({ onboarding: safe, updated_at: now.toISOString() })
     .eq("id", 1);
   if (error) {
     throw new Error(`profile setOnboarding failed: ${error.message}`);
