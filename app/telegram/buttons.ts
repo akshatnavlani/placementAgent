@@ -7,7 +7,8 @@ export type CallbackDecoded =
   | { kind: "approve" }
   | { kind: "profile"; action: ProfileCallbackAction }
   | { kind: "github"; action: "ok" | "no"; index: number }
-  | { kind: "ask"; optionIndex: number };
+  | { kind: "ask"; optionIndex: number }
+  | { kind: "mail"; mailId: string; driveId: string };
 
 export function encodeCallback(kind: DriveCallbackKind, driveId: string): string {
   const prefix = kind === "prepare" ? "p" : kind === "applied" ? "a" : "s";
@@ -33,6 +34,14 @@ export function decodeCallback(data: string): CallbackDecoded | null {
   const ask = /^ask:(\d+)$/.exec(data);
   if (ask) {
     return { kind: "ask", optionIndex: Number(ask[1]) };
+  }
+  const mail = /^m:([^:]+):(.+)$/.exec(data);
+  if (mail) {
+    const mailId = mail[1] ?? "";
+    const driveId = mail[2] ?? "";
+    if (mailId && driveId) {
+      return { kind: "mail", mailId, driveId };
+    }
   }
   const match = /^(p|a|s):(.+)$/.exec(data);
   if (!match) {
@@ -101,4 +110,27 @@ export function askChoiceKeyboard(options: string[]): Record<string, unknown> {
     },
   ]);
   return { inline_keyboard: rows };
+}
+
+/** Ambiguous mail → choose drive. Uses m:<mailId>:<driveId> (≤64 bytes for uuid+ObjectId). */
+export function encodeMailCallback(mailId: string, driveId: string): string {
+  const data = `m:${mailId}:${driveId}`;
+  if (data.length > 64) {
+    throw new Error("callback_data exceeds Telegram 64-byte limit");
+  }
+  return data;
+}
+
+export function chooseMailDriveKeyboard(
+  mailId: string,
+  drives: Array<{ id: string; label: string }>,
+): Record<string, unknown> {
+  return {
+    inline_keyboard: drives.slice(0, 8).map((drive) => [
+      {
+        text: drive.label.slice(0, 40),
+        callback_data: encodeMailCallback(mailId, drive.id),
+      },
+    ]),
+  };
 }

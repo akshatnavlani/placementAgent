@@ -30,6 +30,7 @@ import { extractPdfText } from "../pdf/extract.ts";
 import { TelegramClient } from "../telegram/client.ts";
 import { shouldAlert } from "../telegram/dedup.ts";
 import { notifyEligibleDrive } from "../telegram/notify.ts";
+import { syncRecruitmentMail } from "../mail/sync.ts";
 import { runDailyApplyPass } from "./dailyApply.ts";
 import { diffCatalog, eventDisplayFields, extractPdfUrls, type DiffAction } from "./diff.ts";
 import { sendDeadlineReminders } from "./reminders.ts";
@@ -51,6 +52,8 @@ export type PollSummary = {
   reminded: number;
   applyChecked: number;
   markedApplied: number;
+  mailProcessed?: number;
+  mailNotified?: number;
 };
 
 export type PollLogger = PlacementLogger & {
@@ -78,6 +81,8 @@ export type RunPollDeps = {
   reminders?: boolean;
   /** When false, skip daily checkApplyStatus pass. */
   dailyApply?: boolean;
+  /** When false, skip Gmail recruitment mail pass. */
+  mailSync?: boolean;
   /** Internal: true after one renewal retry of the full poll. */
   alreadyRetried?: boolean;
 };
@@ -486,6 +491,30 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     }
   }
 
+  let mailProcessed = 0;
+  let mailNotified = 0;
+  if (deps.mailSync !== false) {
+    try {
+      const mailResult = await syncRecruitmentMail({
+        config: deps.config,
+        db,
+        log,
+        fetch: fetchImpl,
+        now,
+        telegram: telegramClient,
+        notion: deps.notion,
+        notify: deps.notify !== false,
+      });
+      mailProcessed = mailResult.processed;
+      mailNotified = mailResult.notified;
+      alerts.push(...mailResult.alerts);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "mail sync error";
+      log?.warn?.({ reason: message }, "mail sync failed; poll continues");
+      alerts.push(`mail_sync:${message}`);
+    }
+  }
+
   log?.info(
     {
       inserted,
@@ -499,6 +528,8 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       reminded,
       applyChecked,
       markedApplied,
+      mailProcessed,
+      mailNotified,
       alertCount: alerts.length,
     },
     "poll complete",
@@ -518,6 +549,8 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     reminded,
     applyChecked,
     markedApplied,
+    mailProcessed,
+    mailNotified,
   };
 }
 

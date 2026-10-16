@@ -2,7 +2,13 @@ import type { DbClient } from "../db/client.ts";
 import { getDrive, listDrives, setNotionPageId, type DriveRow } from "../db/drive.ts";
 import type { TelegramClient } from "../telegram/client.ts";
 import { NotionClient, type NotionLogger } from "./client.ts";
-import { LATER_STAGES, mapDriveProperties, readNotionStatus, WATCHER_STATUSES } from "./map.ts";
+import {
+  LATER_STAGES,
+  mapDriveProperties,
+  readNotionStatus,
+  WATCHER_STATUSES,
+  type NotionStatusName,
+} from "./map.ts";
 
 export type NotionSyncLogger = NotionLogger & {
   error?: (obj: Record<string, unknown>, msg?: string) => void;
@@ -56,9 +62,15 @@ export async function syncDrive(deps: SyncDriveDeps, row: DriveRow): Promise<Syn
   const pageId = row.notion_page_id;
 
   if (!pageId) {
+    const createStatus =
+      row.status === "Not Applied" || row.status === "Applied"
+        ? row.status
+        : row.status && LATER_STAGES.has(row.status)
+          ? row.status
+          : "New";
     const properties = mapDriveProperties(row, {
       includeStatus: true,
-      statusOverride: row.status === "Not Applied" || row.status === "Applied" ? row.status : "New",
+      statusOverride: createStatus,
     });
     const created = await deps.notion.createPage(deps.databaseId, properties);
     if (!created.ok) {
@@ -72,9 +84,12 @@ export async function syncDrive(deps: SyncDriveDeps, row: DriveRow): Promise<Syn
   }
 
   let includeStatus = true;
-  let statusOverride: "New" | "Applied" | "Not Applied" | undefined;
+  let statusOverride: NotionStatusName | undefined;
 
   if (row.status === "Not Applied" || row.status === "Applied") {
+    statusOverride = row.status;
+  } else if (row.status && LATER_STAGES.has(row.status)) {
+    // Mail worker (and later) may push Assessment / Interview / Accepted / Rejected.
     statusOverride = row.status;
   } else if (row.status === "New" || row.status === null) {
     const retrieved = await deps.notion.retrievePage(pageId);
@@ -87,12 +102,12 @@ export async function syncDrive(deps: SyncDriveDeps, row: DriveRow): Promise<Syn
     }
     const notionStatus = readNotionStatus(retrieved.data.properties);
     if (notionStatus && LATER_STAGES.has(notionStatus)) {
+      // Watcher must never revert Assessment+ → New.
       includeStatus = false;
     } else {
       statusOverride = "New";
     }
   } else if (row.status && !WATCHER_STATUSES.has(row.status)) {
-    // Supabase already has a later stage (mail worker / future); still do not write it from here.
     includeStatus = false;
   }
 
@@ -115,9 +130,15 @@ async function recreatePage(
   now: Date,
 ): Promise<SyncDriveResult> {
   deps.log?.warn({ driveId: row.id, alert: `notion_recreate:${row.id}` }, "notion page missing; recreating");
+  const recreateStatus =
+    row.status === "Not Applied" || row.status === "Applied"
+      ? row.status
+      : row.status && LATER_STAGES.has(row.status)
+        ? row.status
+        : "New";
   const properties = mapDriveProperties(row, {
     includeStatus: true,
-    statusOverride: row.status === "Not Applied" || row.status === "Applied" ? row.status : "New",
+    statusOverride: recreateStatus,
   });
   const created = await deps.notion.createPage(deps.databaseId, properties);
   if (!created.ok) {

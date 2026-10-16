@@ -1,0 +1,6 @@
+{
+  "subject": "Offer confirmation — Acme Corp",
+  "snippet": "Your acceptance has been confirmed",
+  "bodyText": "Dear Ada,\n\nYour acceptance has been confirmed. Welcome aboard!\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

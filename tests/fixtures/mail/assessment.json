@@ -1,0 +1,6 @@
+{
+  "subject": "Acme Corp — Online Assessment link",
+  "snippet": "Please complete the HackerRank OA",
+  "bodyText": "Dear candidate,\n\nPlease complete the online assessment on HackerRank using the test link below within 48 hours.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

@@ -275,6 +275,8 @@ Poll both mailboxes. The PESU account receives public shortlists. Either account
 
 Match mail to a stored drive by company and role. If two drives match, or none do, ask. Do not create a drive from mail.
 
+**Live notes (M11):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap uses a keyword query capped per account. Rule classifier only. `mail.notified_at` prevents double Telegram. Notion later-stage Status is written by the mail path; catalog polls still omit Status when Notion is already Assessment+. Calendar create/update stays M12.
+
 ### 5.7 Onboarding (first run)
 
 1. Log in. Store platform fields separately from anything you type.

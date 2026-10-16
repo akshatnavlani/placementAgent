@@ -1,0 +1,6 @@
+{
+  "subject": "Update on your application — Acme",
+  "snippet": "We regret to inform you",
+  "bodyText": "Dear Ada,\n\nWe regret to inform you that you have not been shortlisted for the next round at Acme Corp.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

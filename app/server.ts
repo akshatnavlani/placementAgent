@@ -6,6 +6,7 @@ import { createDbClient } from "./db/client.ts";
 import { assertDraftCallbackConfigured, draftCallbackBodySchema, handleDraftCallback } from "./draft/callback.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
+import { syncRecruitmentMail } from "./mail/sync.ts";
 import { runPoll } from "./poll/runPoll.ts";
 import { TelegramClient } from "./telegram/client.ts";
 import { notifyPollOps } from "./telegram/ops.ts";
@@ -109,6 +110,38 @@ export function buildServer(config: Config): FastifyInstance {
         },
       });
       return reply.code(result.status).send(result.body);
+    },
+  );
+
+  app.post(
+    "/cron/mail",
+    {
+      onRequest: async (request, reply) => {
+        if (!hasBearerSecret(request.headers.authorization, config.CRON_SHARED_SECRET)) {
+          return reply.code(401).send({ error: "unauthorized" });
+        }
+      },
+    },
+    async (request, reply) => {
+      let db;
+      try {
+        const supabase = requireSupabase(config);
+        db = createDbClient(supabase.url, supabase.serviceRoleKey);
+      } catch {
+        return reply.code(503).send({ error: "supabase_not_configured" });
+      }
+
+      const mail = await syncRecruitmentMail({
+        config,
+        db,
+        log: {
+          info: (obj, msg) => request.log.info(obj, msg),
+          warn: (obj, msg) => request.log.warn(obj, msg),
+          error: (obj, msg) => request.log.error(obj, msg),
+        },
+      });
+
+      return reply.code(202).send({ accepted: true, mail });
     },
   );
 

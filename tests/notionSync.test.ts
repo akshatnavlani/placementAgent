@@ -134,6 +134,26 @@ describe("syncDrive", () => {
     expect(body.properties.Name).toBeDefined();
   });
 
+  it("writes Interview status when mail worker advanced the drive", async () => {
+    const { db, rows } = memoryDb([
+      baseRow({ notion_page_id: "page-1", status: "Interview" }),
+    ]);
+    const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        return new Response(JSON.stringify({ id: "page-1" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("no", { status: 404 });
+    });
+    const notion = new NotionClient({ token: "tok", fetch: fetchMock as unknown as typeof fetch });
+    const result = await syncDrive({ db, notion, databaseId: "db-1" }, rows.get("drive-1")!);
+    expect(result.ok).toBe(true);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    expect(body.properties.Status).toEqual({ status: { name: "Interview" } });
+  });
+
   it("writes Not Applied status", async () => {
     const { db, rows } = memoryDb([
       baseRow({ notion_page_id: "page-1", status: "Not Applied", is_eligible: false }),

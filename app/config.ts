@@ -134,6 +134,24 @@ export function hasGmailPesu(config: Config): boolean {
   );
 }
 
+export function requireGmailPersonal(config: Config): {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+} {
+  return {
+    clientId: requireVar(config, "GOOGLE_CLIENT_ID"),
+    clientSecret: requireVar(config, "GOOGLE_CLIENT_SECRET"),
+    refreshToken: requireVar(config, "GOOGLE_REFRESH_TOKEN_PERSONAL"),
+  };
+}
+
+export function hasGmailPersonal(config: Config): boolean {
+  return Boolean(
+    config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET && config.GOOGLE_REFRESH_TOKEN_PERSONAL,
+  );
+}
+
 export function requireDraftCallbackSecret(config: Config): string {
   return requireVar(config, "DRAFT_CALLBACK_SECRET");
 }

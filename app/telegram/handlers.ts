@@ -4,7 +4,8 @@ import { beginOtpAfterApprove, completeOtp, type OtpDeps } from "../auth/otp.ts"
 import type { Config } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
 import { listNewDrives } from "../db/drive.ts";
-import { loadFullProfile } from "../db/profile.ts";
+import { getMailById } from "../db/mail.ts";
+import { loadFullProfile, loadPlatformProfile } from "../db/profile.ts";
 import { loadAuthState } from "../db/secret.ts";
 import {
   handlePrepareAskChoice,
@@ -13,6 +14,8 @@ import {
   startPrepareAsk,
 } from "../draft/askMissing.ts";
 import { prepareDrive, prepareReplyText } from "../draft/prepare.ts";
+import { bindMailAndApply } from "../mail/applyClassification.ts";
+import { classifyRecruitmentMail, nameTokensFromProfile } from "../mail/classify.ts";
 import type { PlacementClient } from "../placement/client.ts";
 import {
   chooseDriveKeyboard,
@@ -263,6 +266,46 @@ export async function handleTelegramUpdate(
         return { handled: true, reason: prepared.reason };
       }
       return { handled: true, reason: `ask_${ask.kind}` };
+    }
+    if (decoded.kind === "mail") {
+      await deps.telegram.answerCallbackQuery(callback.id, "Binding…");
+      if (!deps.db || !deps.config) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Mail bind is not configured yet.");
+        return { handled: true, reason: "mail_unconfigured" };
+      }
+      const mail = await getMailById(deps.db, decoded.mailId);
+      if (!mail) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "That mail row is gone.");
+        return { handled: true, reason: "mail_missing" };
+      }
+      const profile = await loadPlatformProfile(deps.db);
+      const tokens = profile ? nameTokensFromProfile(profile.platform) : [];
+      const classified = classifyRecruitmentMail({
+        subject: mail.subject,
+        snippet: mail.snippet,
+        bodyText: typeof mail.raw_meta.bodyText === "string" ? mail.raw_meta.bodyText : mail.snippet,
+        studentNameTokens: tokens,
+      });
+      // Prefer stored classification from when we asked
+      const result = await bindMailAndApply(
+        {
+          config: deps.config,
+          db: deps.db,
+          telegram: deps.telegram,
+          chatId: deps.allowedChatId,
+          fetch: deps.fetch,
+          log: deps.log,
+        },
+        { ...mail, classification: mail.classification },
+        decoded.driveId,
+        {
+          ...classified,
+          classification: mail.classification,
+          confidence: mail.confidence,
+          reason: classified.reason || mail.classification,
+        },
+      );
+      return { handled: true, reason: result.asked ? "mail_ask" : `mail_${result.reason}` };
     }
     if (decoded.kind === "prepare") {
       await deps.telegram.answerCallbackQuery(callback.id, "Preparing…");

@@ -1,0 +1,6 @@
+{
+  "subject": "Shortlist for Acme Corp SDE Intern",
+  "snippet": "The following candidates have been shortlisted",
+  "bodyText": "Dear students,\n\nThe following candidates have been shortlisted for the next round at Acme Corp:\n\n1. Ada Lovelace\n2. Alan Turing\n3. Grace Hopper\n\nAll the best to shortlisted candidates.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

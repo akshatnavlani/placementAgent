@@ -81,4 +81,12 @@ describe("callback_data", () => {
   it("decodes Approve as ok", () => {
     expect(decodeCallback("ok")).toEqual({ kind: "approve" });
   });
+
+  it("round-trips mail choose-drive callback within 64 bytes", () => {
+    const mailId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    const driveId = "6ad05fd6b7a2c9401084f819";
+    const data = `m:${mailId}:${driveId}`;
+    expect(data.length).toBeLessThanOrEqual(64);
+    expect(decodeCallback(data)).toEqual({ kind: "mail", mailId, driveId });
+  });
 });

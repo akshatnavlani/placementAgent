@@ -1,0 +1,6 @@
+{
+  "subject": "Interview rescheduled — Acme Corp",
+  "snippet": "The interview has been postponed",
+  "bodyText": "Hi, your interview with Acme Corp has been rescheduled to Friday 2pm.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

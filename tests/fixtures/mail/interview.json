@@ -1,0 +1,6 @@
+{
+  "subject": "Interview schedule — Acme Corp",
+  "snippet": "Your technical interview is scheduled",
+  "bodyText": "Hello,\n\nYour technical interview for Acme Corp SDE is scheduled for Monday 10am.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

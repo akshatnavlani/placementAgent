@@ -1,0 +1,6 @@
+{
+  "subject": "Some students shortlisted — Acme",
+  "snippet": "A few students were shortlisted",
+  "bodyText": "Hi, a few students were shortlisted for Acme. More names may follow.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

@@ -520,6 +520,8 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 - A group shortlist without your name does not auto-reject unless completeness rules pass (default: ask / leave unresolved).
 - Reprocessing the same message does not double-notify.
 
+**Live notes (M11):** Mail pass runs at the end of `/cron/poll` and via isolated `POST /cron/mail` (same Bearer cron secret). Tables `mail` + `mail_sync`. Rules-only classifier in `app/mail/classify.ts` (no LLM). Status writes are forward-only via `setMailStage`. Ambiguous matches use Telegram `m:<mailId>:<driveId>` buttons. Personal mailbox is optional (`GOOGLE_REFRESH_TOKEN_PERSONAL`); both refresh tokens need `gmail.readonly`. Incomplete shortlists never auto-reject.
+
 ---
 
 ### M12 — Google Calendar

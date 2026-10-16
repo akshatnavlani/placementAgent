@@ -335,3 +335,66 @@ export async function setDraftStatus(
     throw new Error(`drive setDraftStatus failed: ${error.message}`);
   }
 }
+
+const MAIL_STAGE_RANK: Record<string, number> = {
+  Applied: 1,
+  Assessment: 2,
+  Interview: 3,
+  Accepted: 4,
+};
+
+export type MailStageStatus = "Assessment" | "Interview" | "Accepted" | "Rejected";
+
+/**
+ * Mail worker stage write. Forward-only among Applied→Assessment→Interview→Accepted,
+ * or to Rejected from Applied/Assessment/Interview. Never writes New / Not Applied.
+ */
+export async function setMailStage(
+  db: DbClient,
+  id: string,
+  target: MailStageStatus,
+  now: Date = new Date(),
+): Promise<{ ok: true; from: DriveStatus | null } | { ok: false; reason: string }> {
+  const row = await getDrive(db, id);
+  if (!row) {
+    return { ok: false, reason: "missing_drive" };
+  }
+  const from = row.status;
+  if (from === "Not Applied") {
+    return { ok: false, reason: "not_applied" };
+  }
+  if (from === "Rejected") {
+    return { ok: false, reason: "already_rejected" };
+  }
+  if (from === "New" || from === null) {
+    return { ok: false, reason: "not_applied_yet" };
+  }
+
+  if (target === "Rejected") {
+    if (from !== "Applied" && from !== "Assessment" && from !== "Interview") {
+      return { ok: false, reason: "cannot_reject" };
+    }
+  } else {
+    const fromRank = MAIL_STAGE_RANK[from] ?? 0;
+    const toRank = MAIL_STAGE_RANK[target] ?? 0;
+    if (toRank <= fromRank) {
+      return { ok: false, reason: "regress_or_same" };
+    }
+  }
+
+  if (from === target) {
+    return { ok: true, from };
+  }
+
+  const { error } = await db
+    .from("drive")
+    .update({
+      status: target,
+      updated_at: now.toISOString(),
+    })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive setMailStage failed: ${error.message}`);
+  }
+  return { ok: true, from };
+}
