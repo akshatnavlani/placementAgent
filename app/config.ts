@@ -22,6 +22,10 @@ const envSchema = z.object({
   GOOGLE_REFRESH_TOKEN_PERSONAL: z.string().min(1).optional(),
   CURSOR_WEBHOOK_URL: z.string().url().optional(),
   CURSOR_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Claude Code routine API fire URL (…/routines/trig_…/fire). */
+  CLAUDE_CODE_ROUTINE_FIRE_URL: z.string().url().optional(),
+  /** Per-routine bearer token (sk-ant-oat01-…). */
+  CLAUDE_CODE_ROUTINE_TOKEN: z.string().min(1).optional(),
   DRAFT_CALLBACK_SECRET: z.string().min(32).optional(),
   /** Public base URL of this watcher (e.g. https://pesu-placement-watcher.onrender.com). */
   PUBLIC_BASE_URL: z.string().url().optional(),
@@ -169,20 +173,83 @@ export function requireDraftCallbackSecret(config: Config): string {
   return requireVar(config, "DRAFT_CALLBACK_SECRET");
 }
 
+export type DrafterProvider = "claude_code" | "cursor";
+
+export type DrafterConfig =
+  | {
+      provider: "claude_code";
+      fireUrl: string;
+      fireToken: string;
+      callbackSecret: string;
+      publicBaseUrl: string;
+    }
+  | {
+      provider: "cursor";
+      webhookUrl: string;
+      webhookSecret: string | undefined;
+      callbackSecret: string;
+      publicBaseUrl: string;
+    };
+
+function hasClaudeCodeDrafter(config: Config): boolean {
+  return Boolean(
+    config.CLAUDE_CODE_ROUTINE_FIRE_URL &&
+      config.CLAUDE_CODE_ROUTINE_TOKEN &&
+      config.DRAFT_CALLBACK_SECRET &&
+      config.PUBLIC_BASE_URL,
+  );
+}
+
+export function hasCursorDrafter(config: Config): boolean {
+  return Boolean(config.CURSOR_WEBHOOK_URL && config.DRAFT_CALLBACK_SECRET && config.PUBLIC_BASE_URL);
+}
+
+/** True when either Claude Code or Cursor drafter env is complete. */
+export function hasDrafter(config: Config): boolean {
+  return hasClaudeCodeDrafter(config) || hasCursorDrafter(config);
+}
+
+/**
+ * Prefer Claude Code when both providers are configured (migration default).
+ */
+export function requireDrafter(config: Config): DrafterConfig {
+  const callbackSecret = requireDraftCallbackSecret(config);
+  const publicBaseUrl = requireVar(config, "PUBLIC_BASE_URL").replace(/\/$/, "");
+
+  if (hasClaudeCodeDrafter(config)) {
+    return {
+      provider: "claude_code",
+      fireUrl: requireVar(config, "CLAUDE_CODE_ROUTINE_FIRE_URL"),
+      fireToken: requireVar(config, "CLAUDE_CODE_ROUTINE_TOKEN"),
+      callbackSecret,
+      publicBaseUrl,
+    };
+  }
+
+  return {
+    provider: "cursor",
+    webhookUrl: requireVar(config, "CURSOR_WEBHOOK_URL"),
+    webhookSecret: config.CURSOR_WEBHOOK_SECRET,
+    callbackSecret,
+    publicBaseUrl,
+  };
+}
+
+/** @deprecated Prefer requireDrafter; kept for Cursor-only call sites/tests. */
 export function requireCursorDrafter(config: Config): {
   webhookUrl: string;
   webhookSecret: string | undefined;
   callbackSecret: string;
   publicBaseUrl: string;
 } {
+  const drafter = requireDrafter(config);
+  if (drafter.provider !== "cursor") {
+    throw new Error("Cursor drafter not configured (Claude Code is preferred when both are set)");
+  }
   return {
-    webhookUrl: requireVar(config, "CURSOR_WEBHOOK_URL"),
-    webhookSecret: config.CURSOR_WEBHOOK_SECRET,
-    callbackSecret: requireDraftCallbackSecret(config),
-    publicBaseUrl: requireVar(config, "PUBLIC_BASE_URL").replace(/\/$/, ""),
+    webhookUrl: drafter.webhookUrl,
+    webhookSecret: drafter.webhookSecret,
+    callbackSecret: drafter.callbackSecret,
+    publicBaseUrl: drafter.publicBaseUrl,
   };
-}
-
-export function hasCursorDrafter(config: Config): boolean {
-  return Boolean(config.CURSOR_WEBHOOK_URL && config.DRAFT_CALLBACK_SECRET && config.PUBLIC_BASE_URL);
 }

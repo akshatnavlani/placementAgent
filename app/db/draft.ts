@@ -1,4 +1,5 @@
 import type { DbClient } from "./client.ts";
+import type { PreparePayload } from "../draft/payload.ts";
 
 export type DraftStatus = "pending" | "ready" | "failed";
 
@@ -13,6 +14,7 @@ export type DraftRow = {
   error: string | null;
   callback_at: string | null;
   delivered_at: string | null;
+  request_payload: PreparePayload | null;
   created_at: string;
   updated_at: string;
 };
@@ -34,6 +36,17 @@ function asAnswers(value: unknown): DraftAnswer[] {
   return out;
 }
 
+function asRequestPayload(value: unknown): PreparePayload | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.driveId !== "string" || typeof row.callbackUrl !== "string") {
+    return null;
+  }
+  return value as PreparePayload;
+}
+
 function mapRow(row: Record<string, unknown>): DraftRow {
   return {
     id: String(row.id),
@@ -44,6 +57,7 @@ function mapRow(row: Record<string, unknown>): DraftRow {
     error: (row.error as string | null) ?? null,
     callback_at: (row.callback_at as string | null) ?? null,
     delivered_at: (row.delivered_at as string | null) ?? null,
+    request_payload: asRequestPayload(row.request_payload),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -54,6 +68,7 @@ export async function insertPendingDraft(
   db: DbClient,
   driveId: string,
   now: Date = new Date(),
+  requestPayload?: PreparePayload,
 ): Promise<void> {
   const iso = now.toISOString();
   const { error } = await db.from("draft").insert({
@@ -62,6 +77,7 @@ export async function insertPendingDraft(
     latex: null,
     answers: [],
     error: null,
+    request_payload: requestPayload ?? null,
     created_at: iso,
     updated_at: iso,
   });
@@ -87,6 +103,20 @@ export async function getLatestDraft(db: DbClient, driveId: string): Promise<Dra
     return fallback.data ? mapRow(fallback.data as Record<string, unknown>) : null;
   }
   return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
+/**
+ * Latest pending draft's stored prepare payload (Claude Code fetch path).
+ */
+export async function getLatestPendingPayload(
+  db: DbClient,
+  driveId: string,
+): Promise<PreparePayload | null> {
+  const latest = await getLatestDraft(db, driveId);
+  if (!latest || latest.status !== "pending" || !latest.request_payload) {
+    return null;
+  }
+  return latest.request_payload;
 }
 
 export async function completeDraftReady(

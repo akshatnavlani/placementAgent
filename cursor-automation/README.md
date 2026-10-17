@@ -1,6 +1,8 @@
-# Cursor automation setup (M9)
+# Cursor automation setup (legacy drafter)
 
-The watcher does not create the automation. You create it once in Cursor, then point Render at its webhook URL.
+Prefer **Claude Code** for new setups: see [`../claude-automation/README.md`](../claude-automation/README.md).
+
+The watcher still supports Cursor Automations when Claude Code env is unset. If both are configured, **Claude Code wins**.
 
 ## 1. Create the automation
 
@@ -20,6 +22,8 @@ On the watcher service (`pesu-placement-watcher`):
 | `CURSOR_WEBHOOK_SECRET` | Cursor’s webhook **API key** (Bearer for inbound POST). Same as what you put in local `.env` if you copied it. |
 | `DRAFT_CALLBACK_SECRET` | Shared secret (≥32) you invent once — Render only; also mirrored into each Prepare payload as `callbackSecret` |
 | `PUBLIC_BASE_URL` | `https://pesu-placement-watcher.onrender.com` |
+
+Do **not** set `CLAUDE_CODE_ROUTINE_*` if you want Cursor to remain the provider.
 
 Redeploy after setting env. Local `.env` does not affect the live Telegram bot.
 

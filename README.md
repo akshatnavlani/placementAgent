@@ -29,6 +29,8 @@ npm run build
 
 The Render free web service `pesu-placement-watcher` builds the `deploy` branch with `npm ci --include=dev && npm run build` and starts with `npm start`. Secrets live only in the Render environment and a local, gitignored `.env`.
 
+Prepare drafts via Claude Code routines by default: [claude-automation/README.md](claude-automation/README.md). Cursor Automations remain a fallback: [cursor-automation/README.md](cursor-automation/README.md).
+
 ## Database
 
 SQL migrations live in `supabase/migrations/` and are applied in filename order.

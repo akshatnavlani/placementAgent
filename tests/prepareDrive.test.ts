@@ -280,4 +280,63 @@ describe("prepareDrive", () => {
     expect(result.kind).toBe("webhook_failed");
     expect(drive.draft_status).toBe("failed");
   });
+
+  it("Claude path stores request_payload and fires compact text", async () => {
+    const { db, drive, drafts } = prepareStore(driveRow({ id: "d1" }));
+    const config = {
+      ...baseConfig,
+      CURSOR_WEBHOOK_URL: undefined,
+      CURSOR_WEBHOOK_SECRET: undefined,
+      CLAUDE_CODE_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_01/fire",
+      CLAUDE_CODE_ROUTINE_TOKEN: "sk-ant-oat01-test",
+    } as Config;
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          type: "routine_fire",
+          claude_code_session_id: "session_01",
+          claude_code_session_url: "https://claude.ai/code/session_01",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const result = await prepareDrive(
+      { config, db, telegram: tg(), chatId: "1", fetch: fetchMock as unknown as typeof fetch },
+      "d1",
+    );
+    expect(result.kind).toBe("preparing");
+    expect(drive.draft_status).toBe("pending");
+    expect(drafts[0]?.request_payload).toMatchObject({
+      driveId: "d1",
+      company: "Acme",
+      callbackSecret: config.DRAFT_CALLBACK_SECRET,
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(call[0]).toBe(config.CLAUDE_CODE_ROUTINE_FIRE_URL);
+    const headers = call[1].headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer sk-ant-oat01-test");
+    const body = JSON.parse(String(call[1].body)) as { text: string };
+    const pointer = JSON.parse(body.text) as Record<string, string>;
+    expect(pointer.driveId).toBe("d1");
+    expect(pointer.payloadUrl).toContain("/draft/prepare-payload?driveId=d1");
+    expect(pointer.callbackUrl).toContain("/draft/callback");
+    expect(pointer.callbackSecret).toBe(config.DRAFT_CALLBACK_SECRET);
+  });
+
+  it("prefers Claude Code when both providers are configured", async () => {
+    const { db } = prepareStore(driveRow({ id: "d1" }));
+    const config = {
+      ...baseConfig,
+      CLAUDE_CODE_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_01/fire",
+      CLAUDE_CODE_ROUTINE_TOKEN: "sk-ant-oat01-test",
+    } as Config;
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    await prepareDrive(
+      { config, db, telegram: tg(), chatId: "1", fetch: fetchMock as unknown as typeof fetch },
+      "d1",
+    );
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(call[0]).toContain("claude_code/routines");
+  });
 });

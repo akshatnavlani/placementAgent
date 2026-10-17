@@ -1,5 +1,5 @@
 import type { Config } from "../config.ts";
-import { hasCursorDrafter, requireCursorDrafter } from "../config.ts";
+import { hasDrafter, requireDrafter } from "../config.ts";
 import { hydrateAnswersFromProfile, listApprovedReusable, preseedFromProfile } from "../db/answer.ts";
 import type { DbClient } from "../db/client.ts";
 import { failDraft, getLatestDraft, insertPendingDraft } from "../db/draft.ts";
@@ -7,6 +7,7 @@ import { getDrive, setDraftStatus } from "../db/drive.ts";
 import { loadFullProfile } from "../db/profile.ts";
 import { buildDraftFacts, profileReadyForDraft } from "../profile/draftFacts.ts";
 import type { TelegramClient } from "../telegram/client.ts";
+import { postClaudeRoutineFire } from "./claudeFire.ts";
 import { deliverReadyDraft } from "./deliver.ts";
 import {
   buildPreparePayload,
@@ -70,7 +71,7 @@ export function prepareReplyText(result: PrepareResult): string {
 }
 
 /**
- * Start a Cursor draft for one drive. Idempotent while pending.
+ * Start a draft agent run for one drive. Idempotent while pending.
  * Redelivers an undelivered ready draft without a new agent run.
  */
 export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<PrepareResult> {
@@ -83,7 +84,7 @@ export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<
     return { kind: "already_pending", driveId };
   }
 
-  if (!hasCursorDrafter(deps.config)) {
+  if (!hasDrafter(deps.config)) {
     return { kind: "not_configured" };
   }
 
@@ -96,7 +97,7 @@ export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<
     return { kind: "missing_latex" };
   }
 
-  // Redeliver ready-but-undelivered without a new Cursor run.
+  // Redeliver ready-but-undelivered without a new agent run.
   if (drive.draft_status === "ready") {
     const latest = await getLatestDraft(deps.db, driveId);
     if (latest?.status === "ready" && latest.latex && !latest.delivered_at) {
@@ -144,33 +145,59 @@ export async function prepareDrive(deps: PrepareDeps, driveId: string): Promise<
     return { kind: "need_answers", driveId, fields: missing };
   }
 
-  const cursor = requireCursorDrafter(deps.config);
+  const drafter = requireDrafter(deps.config);
   const facts = buildDraftFacts(profile, answers);
-  const callbackUrl = `${cursor.publicBaseUrl}/draft/callback`;
+  const callbackUrl = `${drafter.publicBaseUrl}/draft/callback`;
   const payload = buildPreparePayload({
     drive,
     facts,
     callbackUrl,
-    callbackSecret: cursor.callbackSecret,
+    callbackSecret: drafter.callbackSecret,
   });
 
   await setDraftStatus(deps.db, driveId, "pending", now);
-  await insertPendingDraft(deps.db, driveId, now);
 
-  deps.log?.info?.(preparePayloadLogKeys(payload), "prepare webhook dispatch");
+  deps.log?.info?.(
+    { ...preparePayloadLogKeys(payload), provider: drafter.provider },
+    "prepare dispatch",
+  );
 
-  const posted = await postCursorWebhook({
-    url: cursor.webhookUrl,
-    secret: cursor.webhookSecret,
-    payload,
-    fetch: deps.fetch,
-    log: deps.log,
-  });
+  let posted: { ok: true } | { ok: false; reason: string };
+  if (drafter.provider === "claude_code") {
+    await insertPendingDraft(deps.db, driveId, now, payload);
+    const payloadUrl = `${drafter.publicBaseUrl}/draft/prepare-payload?driveId=${encodeURIComponent(driveId)}`;
+    posted = await postClaudeRoutineFire({
+      fireUrl: drafter.fireUrl,
+      fireToken: drafter.fireToken,
+      pointer: {
+        driveId,
+        company: payload.company,
+        role: payload.role,
+        payloadUrl,
+        callbackUrl,
+        callbackSecret: drafter.callbackSecret,
+      },
+      fetch: deps.fetch,
+      log: deps.log,
+    });
+  } else {
+    await insertPendingDraft(deps.db, driveId, now);
+    posted = await postCursorWebhook({
+      url: drafter.webhookUrl,
+      secret: drafter.webhookSecret,
+      payload,
+      fetch: deps.fetch,
+      log: deps.log,
+    });
+  }
 
   if (!posted.ok) {
     await setDraftStatus(deps.db, driveId, "failed", now);
     await failDraft(deps.db, driveId, posted.reason, now);
-    deps.log?.warn?.({ driveId, reason: posted.reason }, "prepare webhook failed");
+    deps.log?.warn?.(
+      { driveId, reason: posted.reason, provider: drafter.provider },
+      "prepare dispatch failed",
+    );
     return { kind: "webhook_failed", reason: posted.reason };
   }
 
