@@ -4,11 +4,13 @@ import type { Config } from "./config.ts";
 import { hasTelegram, requireSupabase, requireTelegram } from "./config.ts";
 import { createDbClient } from "./db/client.ts";
 import { getLatestPendingPayload } from "./db/draft.ts";
+import { getPollReportsEnabled } from "./db/secret.ts";
 import { assertDraftCallbackConfigured, draftCallbackBodySchema, handleDraftCallback } from "./draft/callback.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
 import { syncRecruitmentMail } from "./mail/sync.ts";
 import { runPoll } from "./poll/runPoll.ts";
+import { formatPollReply } from "./telegram/handlers.ts";
 import { TelegramClient } from "./telegram/client.ts";
 import { notifyPollOps } from "./telegram/ops.ts";
 import { registerTelegramWebhook } from "./telegram/webhook.ts";
@@ -62,6 +64,21 @@ export function buildServer(config: Config): FastifyInstance {
             },
             poll,
           );
+
+          let reportsOn = true;
+          try {
+            const supabase = requireSupabase(config);
+            const db = createDbClient(supabase.url, supabase.serviceRoleKey);
+            reportsOn = await getPollReportsEnabled(db);
+          } catch {
+            reportsOn = true;
+          }
+          if (reportsOn) {
+            const sent = await telegram.sendMessage(tg.chatId, formatPollReply(poll));
+            if (!sent.ok) {
+              request.log.warn({ reason: sent.reason }, "poll report skipped");
+            }
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : "ops alert error";
           request.log.warn({ reason: message }, "ops notify skipped");

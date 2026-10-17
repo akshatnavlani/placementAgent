@@ -22,6 +22,7 @@ import { syncDrive } from "../notion/sync.ts";
 import type { TelegramClient } from "../telegram/client.ts";
 import { chooseMailDriveKeyboard } from "../telegram/buttons.ts";
 import type { MailClassificationResult } from "./classify.ts";
+import { isActionableMailClassification } from "./placementGate.ts";
 import { driveChoiceLabel, formatAmbiguousMail, formatStageChange } from "./notify.ts";
 
 export type ApplyClassificationDeps = {
@@ -171,7 +172,18 @@ export async function applyClassification(
   const classification = mail.classification;
   const bodyText = options.bodyText ?? deps.bodyText ?? "";
 
-  // Ambiguity ask
+  // Never Telegram spam unresolved / low-confidence mail.
+  if (!isActionableMailClassification(classifyResult)) {
+    return {
+      statusWritten: null,
+      notified: false,
+      asked: false,
+      skipped: true,
+      reason: classifyResult.reason || "not_actionable",
+    };
+  }
+
+  // Ambiguity ask — only for high-signal classifications
   if (!mail.drive_id && options.ambiguousCandidates && options.ambiguousCandidates.length > 0) {
     if (mail.notified_at) {
       return { statusWritten: null, notified: false, asked: false, skipped: true, reason: "already_asked" };
@@ -194,18 +206,15 @@ export async function applyClassification(
     };
   }
 
+  // No drive match: store silently (do not ask / notify).
   if (!mail.drive_id && !options.drive) {
-    if (classification === "unresolved" || !options.drive) {
-      const text = formatStageChange(null, classification, classifyResult.reason);
-      const notified = await notifyOnce(deps, mail, text, undefined, now);
-      return {
-        statusWritten: null,
-        notified,
-        asked: false,
-        skipped: false,
-        reason: classifyResult.reason,
-      };
-    }
+    return {
+      statusWritten: null,
+      notified: false,
+      asked: false,
+      skipped: true,
+      reason: "no_drive_match",
+    };
   }
 
   const drive = options.drive ?? (mail.drive_id ? await getDrive(deps.db, mail.drive_id) : null);

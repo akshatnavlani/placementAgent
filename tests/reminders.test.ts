@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DriveRow } from "../app/db/drive.ts";
 import { sendDeadlineReminders } from "../app/poll/reminders.ts";
+import { nextReminderTierToSend } from "../app/poll/reminderTiers.ts";
 import { TelegramClient } from "../app/telegram/client.ts";
 
 function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
@@ -12,6 +13,7 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
     deadline: null,
     status: "New",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: [],
@@ -37,6 +39,11 @@ function alertStore(seed: DriveRow[]) {
         throw new Error(`unexpected ${table}`);
       }
       return {
+        select: () => ({
+          eq: (_col: string, id: string) => ({
+            maybeSingle: async () => ({ data: rows.get(id) ?? null, error: null }),
+          }),
+        }),
         update: (payload: Record<string, unknown>) => ({
           eq: async (_col: string, id: string) => {
             const prev = rows.get(id);
@@ -52,14 +59,22 @@ function alertStore(seed: DriveRow[]) {
   return { db: db as never, rows };
 }
 
+describe("nextReminderTierToSend", () => {
+  const now = new Date("2026-10-16T00:00:00.000Z");
+
+  it("returns due tiers not yet sent", () => {
+    const deadline = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+    expect(nextReminderTierToSend(deadline, [], now)).toEqual(["12h", "6h", "3h"]);
+    expect(nextReminderTierToSend(deadline, ["12h", "6h", "3h"], now)).toEqual([]);
+  });
+});
+
 describe("sendDeadlineReminders", () => {
   const now = new Date("2026-10-16T00:00:00.000Z");
 
-  it("sends one urgent reminder for New under 6h and sets reminder_sent", async () => {
+  it("sends one reminder for New under 6h and records tiers", async () => {
     const deadline = new Date(now.getTime() + 5 * 60 * 60 * 1000).toISOString();
-    const { db, rows } = alertStore([
-      driveRow({ id: "soon", deadline, reminder_sent: false }),
-    ]);
+    const { db, rows } = alertStore([driveRow({ id: "soon", deadline })]);
     let messages = 0;
     const telegram = new TelegramClient({
       botToken: "bot",
@@ -82,6 +97,9 @@ describe("sendDeadlineReminders", () => {
     expect(first.reminded).toBe(1);
     expect(messages).toBe(1);
     expect(rows.get("soon")?.reminder_sent).toBe(true);
+    expect(rows.get("soon")?.reminder_tiers_sent).toEqual(
+      expect.arrayContaining(["12h", "6h"]),
+    );
 
     const second = await sendDeadlineReminders({
       db,
@@ -99,7 +117,6 @@ describe("sendDeadlineReminders", () => {
       driveRow({
         id: "late",
         deadline: new Date(now.getTime() - 60_000).toISOString(),
-        reminder_sent: false,
       }),
     ]);
     let messages = 0;
@@ -128,7 +145,7 @@ describe("sendDeadlineReminders", () => {
   it("skips Not Applied drives", async () => {
     const deadline = new Date(now.getTime() + 5 * 60 * 60 * 1000).toISOString();
     const { db, rows } = alertStore([
-      driveRow({ id: "na", deadline, status: "Not Applied", reminder_sent: false }),
+      driveRow({ id: "na", deadline, status: "Not Applied" }),
     ]);
     const telegram = new TelegramClient({
       botToken: "bot",

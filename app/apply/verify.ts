@@ -129,9 +129,9 @@ export function verifyReplyText(result: VerifyResult): string {
     case "not_applied":
       return "Platform shows no application.";
     case "could_not_verify":
-      return "Could not verify. Try I applied again later.";
+      return "Could not verify. Try Apply again later.";
     case "no_token":
-      return "Session is down. Wait for renewal, then try I applied again.";
+      return "Session is down. Wait for renewal, then try Apply again.";
     case "missing_drive":
       return "That drive is not in the tracker.";
     case "not_new":

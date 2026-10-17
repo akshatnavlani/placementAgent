@@ -140,14 +140,17 @@ export class PlacementClient {
       method: string;
       path: string;
       body?: unknown;
+      /** When set, sent as multipart; do not set Content-Type (boundary). */
+      formData?: FormData;
       token?: string;
       /** When true, a 401 clears the stored token via onUnauthorized. */
       clearTokenOn401: boolean;
+      timeoutMs?: number;
     },
   ): Promise<PlacementOutcome<{ status: number; json: unknown; durationMs: number }>> {
     const url = new URL(init.path, this.baseUrl).toString();
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (init.body !== undefined) {
+    if (init.body !== undefined && !init.formData) {
       headers["Content-Type"] = "application/json";
     }
     if (init.token) {
@@ -160,8 +163,12 @@ export class PlacementClient {
       response = await this.fetchImpl(url, {
         method: init.method,
         headers,
-        body: init.body === undefined ? undefined : JSON.stringify(init.body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        body: init.formData
+          ? init.formData
+          : init.body === undefined
+            ? undefined
+            : JSON.stringify(init.body),
+        signal: AbortSignal.timeout(init.timeoutMs ?? this.timeoutMs),
       });
     } catch (error) {
       const durationMs = Date.now() - started;
@@ -314,6 +321,95 @@ export class PlacementClient {
         return { kind: "ok", data: obj.studentData as Record<string, unknown> };
       }
       return { kind: "invalid", reason: "getStudent unexpected shape" };
+    });
+  }
+
+  uploadEventResume(
+    token: string,
+    input: {
+      studentID: string;
+      eventID: string;
+      pdf: Uint8Array | Buffer;
+      originalFilename: string;
+    },
+  ): Promise<PlacementOutcome<{ success: boolean; message?: string }>> {
+    return this.enqueue(async () => {
+      const form = new FormData();
+      form.set("studentID", input.studentID);
+      form.set("eventID", input.eventID);
+      form.set("originalFilename", input.originalFilename);
+      form.set(
+        "resume",
+        new File([Uint8Array.from(input.pdf)], input.originalFilename, {
+          type: "application/pdf",
+        }),
+      );
+      const raw = await this.request("uploadEventResume", {
+        method: "POST",
+        path: "studentevents/uploadEventResume",
+        formData: form,
+        token,
+        clearTokenOn401: true,
+        timeoutMs: 30_000,
+      });
+      if (raw.kind !== "ok") {
+        return raw;
+      }
+      const json = raw.data.json;
+      if (!json || typeof json !== "object" || Array.isArray(json)) {
+        return { kind: "invalid", reason: "uploadEventResume body not an object" };
+      }
+      const obj = json as Record<string, unknown>;
+      if (obj.success === false) {
+        return {
+          kind: "invalid",
+          reason: typeof obj.message === "string" ? obj.message : "uploadEventResume failed",
+        };
+      }
+      return {
+        kind: "ok",
+        data: {
+          success: obj.success !== false,
+          message: typeof obj.message === "string" ? obj.message : undefined,
+        },
+      };
+    });
+  }
+
+  applyToEvent(
+    token: string,
+    input: {
+      studentID: string;
+      fullName: string;
+      eventID: string;
+      eventName: string;
+      companyUsername: string;
+      customFieldResponses: Record<string, string>;
+    },
+  ): Promise<PlacementOutcome<{ status: number; message?: string }>> {
+    return this.enqueue(async () => {
+      const raw = await this.request("apply", {
+        method: "POST",
+        path: "studentevents/apply",
+        body: {
+          applicationStatus: "Applied",
+          companyUsername: input.companyUsername,
+          eventID: input.eventID,
+          eventName: input.eventName,
+          fullName: input.fullName,
+          studentID: input.studentID,
+          customFieldResponses: input.customFieldResponses,
+        },
+        token,
+        clearTokenOn401: true,
+      });
+      if (raw.kind === "http" && (raw.status === 403 || raw.status === 409)) {
+        return raw;
+      }
+      if (raw.kind !== "ok") {
+        return raw;
+      }
+      return { kind: "ok", data: { status: raw.data.status } };
     });
   }
 

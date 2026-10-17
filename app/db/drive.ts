@@ -1,4 +1,5 @@
 import type { DbClient } from "./client.ts";
+import { parseReminderTiers, type ReminderTierId } from "../poll/reminderTiers.ts";
 
 export type DriveStatus =
   | "New"
@@ -18,6 +19,8 @@ export type DriveRow = {
   deadline: string | null;
   status: DriveStatus | null;
   reminder_sent: boolean;
+  /** Tier ids already notified: 12h, 6h, 3h, 1h, 30m. */
+  reminder_tiers_sent: ReminderTierId[];
   draft_status: "pending" | "ready" | "failed" | null;
   notion_page_id: string | null;
   pdf_urls: string[];
@@ -80,6 +83,7 @@ function mapRow(row: Record<string, unknown>): DriveRow {
     deadline: (row.deadline as string | null) ?? null,
     status: (row.status as DriveStatus | null) ?? null,
     reminder_sent: Boolean(row.reminder_sent),
+    reminder_tiers_sent: parseReminderTiers(row.reminder_tiers_sent),
     draft_status: (row.draft_status as DriveRow["draft_status"]) ?? null,
     notion_page_id: (row.notion_page_id as string | null) ?? null,
     pdf_urls: asStringArray(row.pdf_urls),
@@ -246,7 +250,7 @@ export async function tryMarkNotApplied(db: DbClient, id: string, now: Date = ne
 export async function markAlerted(
   db: DbClient,
   id: string,
-  options: { reminderSent?: boolean } = {},
+  options: { reminderSent?: boolean; reminderTiers?: ReminderTierId[] } = {},
   now: Date = new Date(),
 ): Promise<void> {
   const iso = now.toISOString();
@@ -257,9 +261,39 @@ export async function markAlerted(
   if (options.reminderSent === true) {
     patch.reminder_sent = true;
   }
+  if (options.reminderTiers && options.reminderTiers.length > 0) {
+    patch.reminder_tiers_sent = options.reminderTiers;
+    patch.reminder_sent = true;
+  }
   const { error } = await db.from("drive").update(patch).eq("id", id);
   if (error) {
     throw new Error(`drive markAlerted failed: ${error.message}`);
+  }
+}
+
+/** Merge new reminder tier ids onto the drive row. */
+export async function addReminderTiersSent(
+  db: DbClient,
+  id: string,
+  tiers: ReminderTierId[],
+  now: Date = new Date(),
+): Promise<void> {
+  if (tiers.length === 0) {
+    return;
+  }
+  const row = await getDrive(db, id);
+  const merged = [...new Set([...(row?.reminder_tiers_sent ?? []), ...tiers])];
+  const iso = now.toISOString();
+  const { error } = await db
+    .from("drive")
+    .update({
+      reminder_tiers_sent: merged,
+      reminder_sent: true,
+      updated_at: iso,
+    })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive addReminderTiersSent failed: ${error.message}`);
   }
 }
 

@@ -30,6 +30,7 @@ function drive(partial: Partial<DriveRow> = {}): DriveRow {
     deadline: "2099-01-01T00:00:00.000Z",
     status: "New",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: ["https://example.com/a.pdf"],

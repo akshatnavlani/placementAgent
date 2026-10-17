@@ -12,6 +12,7 @@ function memoryDb(status: DriveStatus | null) {
     deadline: null,
     status,
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: [],

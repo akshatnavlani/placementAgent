@@ -22,11 +22,11 @@ Two parts sit inside the automation:
 | Part | What it is | When it runs |
 |---|---|---|
 | Watcher | Deterministic workflow | Every 5 minutes, and when a Telegram button is pressed |
-| Drafter | Cursor cloud agent | Only when you tap Prepare |
+| Drafter | Claude Code routine (Cursor webhook fallback) | Only when you tap Prepare |
 
 Telegram is the interface. Notion is the board. Supabase is the record. None of those are agents.
 
-A portable repo of instructions, in the spirit of [ai-job-search](https://github.com/MadsLorentzen/ai-job-search), can come later so another person can run the same commands in Claude Code or their own Cursor account. That repo is not required for version 1, and it is not a second name for this system.
+A portable kit (former M13) is deferred until explicitly revived.
 
 ---
 
@@ -34,7 +34,7 @@ A portable repo of instructions, in the spirit of [ai-job-search](https://github
 
 ### 2.1 Problem
 
-Placement drives appear in the PESU Placements app with deadlines that are often 18–24 hours away, sometimes morning-of. Checking the app by hand is easy to miss. Each drive has its own description, PDF, and questions. Tailoring a resume and answering those questions is the slow part. Submitting the application stays manual.
+Placement drives appear in the PESU Placements app with deadlines that are often 18–24 hours away, sometimes morning-of. Checking the app by hand is easy to miss. Each drive has its own description, PDF, and questions. Tailoring a resume and answering those questions is the slow part. Telegram **Apply** can upload the PDF and submit when you choose.
 
 ### 2.2 Outcome
 
@@ -42,12 +42,12 @@ While the laptop is off, the automation:
 
 1. Notices a new or updated drive you are eligible for.
 2. Tells you on Telegram, and puts a card on a Notion board.
-3. Reminds you once when the deadline is close and you still have not applied.
-4. When you ask, produces a tailored LaTeX resume and answers to that drive’s questions, using a Cursor model, for you to review.
-5. After you apply in the official app, checks the platform and only then marks the card Applied.
-6. Later, classifies recruitment mail (shortlist, assessment, interview, rejection, offer) and updates the same card.
+3. Reminds at 12h / 6h / 3h / 1h / 30m while the drive is still New.
+4. When you ask, produces a tailored LaTeX resume and answers for you to review (Telegram: answers + PDF).
+5. When you tap **Apply**, uploads the PDF, submits on the platform, verifies, then marks Applied.
+6. Classifies recruitment mail (shortlist, assessment, interview, rejection, offer) quietly and updates the same card.
 
-Version 1 ends at a reviewed draft. It does not submit, withdraw, or upload anything to the placement platform.
+Withdrawal (`unapply`) stays manual. Marketing/spam mail is not notified.
 
 ### 2.3 User
 
@@ -64,7 +64,7 @@ One person. The first deployment is personal. The structure should not block a l
 
 ### 2.5 Non-goals for version 1
 
-- Calling `studentevents/apply`, resume upload, or `unapply`.
+- Calling `studentevents/unapply` (withdrawal stays manual).
 - WhatsApp.
 - WebSocket or Firebase push.
 - Using listing email to discover drives.
@@ -84,11 +84,11 @@ Confirmed means agreed in design. Verified means seen in a live response or in c
 | Decision | State |
 |---|---|
 | Placement app is the catalog. Listing mail is not. | Confirmed |
-| Version 1 does not submit applications | Confirmed |
-| You apply in the official app | Confirmed |
+| Version 1 may submit applications via Telegram **Apply** | Confirmed (overturned: was manual-only) |
+| Apply uploads resume PDF then POSTs `studentevents/apply`, then verifies | Confirmed |
 | Telegram is the only chat channel in version 1 | Confirmed |
 | Notion is the board you look at. Supabase is authoritative | Confirmed |
-| Cursor cloud agent drafts. Gemini is not used | Confirmed |
+| Claude Code routine drafts (Cursor webhook fallback). Gemini is not used | Confirmed |
 | Ineligible drives are not shown | Confirmed |
 | Phone number and date of birth are never put in resumes, prompts, or chat | Confirmed |
 | LaTeX is the canonical resume. PDF is produced for review | Confirmed |
@@ -111,15 +111,17 @@ Confirmed means agreed in design. Verified means seen in a live response or in c
 
 | Decision | State |
 |---|---|
-| Prepare starts a Cursor automation via webhook. The 5-minute loop does not. | Confirmed |
-| The webhook payload has the drive text, questions, saved facts, and canonical resume. It has no placement password and no bearer token. | Confirmed |
+| Prepare starts a Claude Code routine fire (or Cursor webhook). The 5-minute loop does not. | Confirmed |
+| The prepare payload has the drive text, questions, saved facts, and canonical resume. It has no placement password and no bearer token. | Confirmed |
 | The job text is data, not instructions | Confirmed |
-| The agent writes the draft to Supabase. Telegram sends it. A private callback to Render is an optimization. | Confirmed |
+| The agent writes the draft to Supabase. Telegram sends answers + PDF only (no `.tex`). | Confirmed |
 | A second Prepare while a draft is running does not start another agent | Confirmed |
-| Render compiles LaTeX if a TeX install fits the free build. Otherwise Telegram receives the LaTeX and the answers. | Confirmed, compile step still to validate |
-| “I applied” calls `checkApplyStatus` for that drive immediately. The card moves only when `applied` is true | Confirmed |
-| One reminder when a drive is still unapplied and under 6 hours remain | Confirmed default. Say if the lead time should change. |
-| A drive first seen inside that window does not get a second reminder. The first alert says the deadline is close | Confirmed |
+| Render compiles LaTeX if a TeX install fits the free build. Otherwise Telegram notes PDF skipped. | Confirmed |
+| **Apply** uploads PDF + submits + `checkApplyStatus`. Card moves only when `applied` is true | Confirmed |
+| Multi-tier reminders: 12h, 6h, 3h, 1h, 30m before deadline while New. Prepare does not stop them. Apply/Skip do. | Confirmed |
+| First alert inside a window marks those tiers sent so discovery does not double-fire | Confirmed |
+| Mail: notify only high-signal placement classifications with a drive match (or genuine ambiguous ask). Never notify unresolved spam. | Confirmed |
+| Cron poll Telegram summaries on by default; `/pollreports off` pauses them | Confirmed |
 | After the deadline with no application, status is Not Applied | Confirmed |
 | A card you have moved to Assessment or later is not moved back to New by a poll | Confirmed |
 
@@ -150,11 +152,11 @@ Render watcher  ----placement API---->  PESU Placements
         |                                      |
         |                               eligible catalog
         v
-   Supabase  <---- draft row ----  Cursor cloud agent
+   Supabase  <---- draft row ----  Claude Code / Cursor
         |                              ^
-        |                              | webhook, only on Prepare
+        |                              | fire / webhook, only on Prepare
         v
-   Telegram  <---- alerts, draft, reminder, login
+   Telegram  <---- alerts, draft, reminder, Apply, poll reports
         |
         v
    Notion board
@@ -237,28 +239,31 @@ Questions are `customFields`. Match saved answers by normalized label, not by `f
 
 **Live notes (M9–M10):** Prepare requires canonical LaTeX (`/profile`). Required `customFields` without approved answers are asked in Telegram (`prepare_ask`) before the Cursor webhook. Watcher POSTs Cursor webhook; agent POSTs `/draft/callback` with Bearer from payload `callbackSecret`. On ready: Telegram gets answers + `.tex` (+ PDF when tectonic compiles); `draft.delivered_at` marks send. Undelivered ready drafts redeliver on Prepare without a new agent run.
 
-### 5.4 I applied
+### 5.4 Apply
 
-Trigger: the button on that drive, or the words “I applied” when exactly one drive is still New. If several are New, ask which one.
+Trigger: the **Apply** button on that drive (including after draft delivery), or free-text `apply` / `I applied` when exactly one drive is still New. If several are New, ask which one.
 
-1. Call `POST studentevents/checkApplyStatus` for that top-level `_id`.
-2. `applied: true` moves Notion and Supabase to Applied and records the time.
-3. `applied: false` leaves the card New and says the platform shows no application.
-4. Timeout or any other failure leaves the card New and says it could not be verified. Do not retry in a loop.
+1. Require a ready draft with LaTeX; compile PDF.
+2. `POST studentevents/uploadEventResume` (multipart) using `companyUsername` already on the drive row.
+3. `POST studentevents/apply` with answers mapped into `customFieldResponses`.
+4. Call `POST studentevents/checkApplyStatus` for that top-level `_id`.
+5. `applied: true` moves Notion and Supabase to Applied and records the time.
+6. Failures (403/409/upload/compile) leave New and report the reason. Do not retry in a loop.
 
-The same check runs once a day for drives still in New, so a forgotten button still catches up. It does not run every 5 minutes.
+A daily `checkApplyStatus` pass still runs for drives still in New (catch-up without re-submit).
 
 `applicationStatus: "Scheduled"` on the drive is the drive’s own state. It does not mean you have applied.
 
-**Live notes (M6):** `applied_at` / `last_apply_check_at` on `drive`. Button + free-text “I applied” share `verifyApplied`. Daily pass uses one `checkApplyStatus` per New drive when `last_apply_check_at` is null or ≥24h old; stops early on rate limit / unavailable. Under-6h reminder is a separate poll pass that sets `reminder_sent`.
+**Live notes (M6 / M17):** `applied_at` / `last_apply_check_at` on `drive`. Telegram Apply uses `submitApplication` (upload → apply → verify). Daily pass still uses `verifyApplied` only. Multi-tier reminders are a separate poll pass (`reminder_tiers_sent`).
 
 **Live notes (M7):** Skip (`s:<id>` / free-text) moves New → Not Applied immediately. Ops Telegram on poll hard failures and placement rate limits. Wake cron is GitHub Actions every 5 minutes (Render Cron Jobs are paid-only).
 
 ### 5.5 Reminder and deadline
 
-- Clock for the reminder is the drive’s `deadline`, displayed in Asia/Kolkata.
-- Send one reminder when remaining time is under 6 hours, status is still New, and a reminder has not been sent.
-- If the drive is first stored with under 6 hours left, the discovery message carries the urgency and `reminder_sent` is set.
+- Clock for reminders is the drive’s `deadline`, displayed in Asia/Kolkata.
+- While status is **New**, send at most one message per crossed tier: 12h, 6h, 3h, 1h, 30m (`reminder_tiers_sent`).
+- Prepare / draft pending does **not** stop reminders. Apply, Skip → Not Applied, or past deadline does.
+- If first seen inside a window, the discovery alert carries urgency and those tiers are marked sent.
 - When `deadline` has passed and status is still New, set Not Applied. Do not remind after that.
 
 ### 5.6 Recruitment mail (phase 2)
@@ -275,7 +280,7 @@ Poll both mailboxes. The PESU account receives public shortlists. Either account
 
 Match mail to a stored drive by company and role. If two drives match, or none do, ask. Do not create a drive from mail.
 
-**Live notes (M11–M12):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap uses a keyword query capped per account. Rule classifier only. `mail.notified_at` prevents double Telegram. Notion later-stage Status is written by the mail path; catalog polls still omit Status when Notion is already Assessment+. Calendar create/update/cancel writes assessment and interview events to a personal `placements` calendar (mail times preferred over `subEvents`).
+**Live notes (M11–M12 / M14):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap query prefers placement language (not bare `offer`). Rule classifier only; marketing/casino noise gated. Telegram notify only for high-confidence actionable classifications with a drive match (or genuine ambiguous ask). `mail.notified_at` prevents double Telegram. If PESU shows `mail_bootstrap_pesu: token refresh failed`, remint `GOOGLE_REFRESH_TOKEN_PESU` against the same OAuth client. Notion later-stage Status is written by the mail path; calendar events on personal `placements` calendar.
 
 ### 5.7 Onboarding (first run)
 
@@ -355,7 +360,9 @@ Nested `_id` values on the job, rounds, questions, and sub-events are not the dr
 | Call | Role | Live shape |
 |---|---|---|
 | `GET students/{studentID}` | Daily profile refresh, and a 401 signal | HTTP 200 body is the profile object itself (`studentID` present). It includes the login fields plus `placementTier`, `internshipOfferedAt`, `summerInternshipOfferedAt`, resume paths, and a `password` field. Strip `password` before storing in Supabase. Do not treat those extra academic fields as eligibility-body inputs. |
-| `POST studentevents/checkApplyStatus` | “I applied,” and the daily pass over New cards | Body `studentID`, `eventID`. Live response: `{ success, applied, canApply, message }`. The app also accepts `hasApplied` if `applied` is missing. `eligibilityReasons` may be absent. |
+| `POST studentevents/checkApplyStatus` | Apply verify, and the daily pass over New cards | Body `studentID`, `eventID`. Live response: `{ success, applied, canApply, message }`. The app also accepts `hasApplied` if `applied` is missing. `eligibilityReasons` may be absent. |
+| `POST studentevents/uploadEventResume` | Apply before submit | Multipart with event id, `companyUsername`, PDF |
+| `POST studentevents/apply` | Telegram Apply | JSON with answers as `customFieldResponses`; then verify |
 
 ### 6.2b Still not captured live
 
@@ -372,8 +379,7 @@ The OTP-required JSON body has not been captured. Build the branch as “token p
 
 | Call | Why |
 |---|---|
-| `studentevents/apply` | No automatic submission |
-| `studentevents/uploadEventResume`, `students/uploadResume` | You upload in the app if you choose to |
+| `students/uploadResume` | Profile resume upload; Apply uses `uploadEventResume` per drive |
 | `studentevents/unapply` | No automatic withdrawal |
 | `inapp` mark-read routes | Would change the phone’s badges |
 | `tokens/register-token` | Firebase device token. A server cannot receive the app’s pushes this way. |
@@ -446,18 +452,20 @@ Official Bot API. The bot may message only the chat id captured when you start i
 
 | You see | You can do |
 |---|---|
-| New drive: company, role, deadline in IST, location, stipend or CTC, rounds | Prepare. I applied. Skip. |
-| “Deadline is close” on first sight inside 6 hours | Same |
-| One reminder under 6 hours | Prepare. I applied. Skip. |
+| New drive: company, role, deadline in IST, location, stipend or CTC, rounds | Prepare. Apply. Skip. |
+| “Deadline is close” on first sight inside a reminder window | Same |
+| Tiered reminders (12h / 6h / 3h / 1h / 30m) | Prepare. Apply. Skip. |
+| Draft ready (answers + PDF) | Apply. Skip. |
+| Cron poll summary (default on) | `/pollreports off` to pause |
 | `/profile` summary or wizard | Redo all. Replace LaTeX. Add GitHub. Looks good. cancel / skip |
 | “Preparing” | Wait |
-| Draft: answers plus PDF or LaTeX | Apply yourself in the official app, then tap I applied |
-| “Platform shows no application” or “could not verify” | Apply or retry I applied |
+| Draft: answers plus PDF (no `.tex`) | Tap Apply to submit |
+| “Platform shows no application” or apply errors | Fix and retry Apply |
 | “Session renewed” | Nothing |
 | “Logged out, waiting for approval” | Approve, then paste OTP only if mail read fails |
 | Drive already pending | Nothing; the second Prepare is ignored |
 
-Free text “I applied” binds to the only New drive. Otherwise the bot asks which drive. Free text “skip” / “won't apply” works the same way and uses Skip buttons when several are New. Buttons carry the drive id so the wrong company cannot be checked. Skip moves New → Not Applied immediately, syncs Notion, and stops reminders and the daily apply check for that drive.
+Free text `apply` / “I applied” binds to the only New drive. Otherwise the bot asks which drive. Free text “skip” / “won't apply” works the same way. Buttons carry the drive id. Skip moves New → Not Applied immediately, syncs Notion, and stops reminders. `/poll` always replies with a summary; `/pollreports on|off` toggles cron summaries.
 
 ---
 
@@ -561,20 +569,20 @@ Build in this order. Do not start the drafter before a poll can store a drive an
 ### Phase 1 — Watcher
 
 1. Supabase tables and locked-down access.
-2. Placement client: login, list, detail, PDF download, profile read, check-apply-status. One call at a time. 401 and 5xx handled as specified.
+2. Placement client: login, list, detail, PDF download, profile read, check-apply-status, uploadEventResume, apply. One call at a time. 401 and 5xx handled as specified.
 3. Academic body built only from the seven verified fields.
 4. Poll: diff by `_id` and `updatedAt`, persist raw JSON, extract PDF text.
-5. Telegram alerts, 6-hour reminder, deadline to Not Applied.
+5. Telegram alerts, multi-tier reminders, deadline to Not Applied.
 6. Session renewal, including the OTP branch.
 7. Notion create and update, without reverting later stages.
-8. “I applied” verification.
-9. Private cron URL.
+8. Apply (upload + submit + verify).
+9. Private cron URL and optional poll heartbeat reports.
 
 ### Phase 2 — Drafter
 
-1. Cursor automation, webhook trigger, instructions from section 10.
+1. Claude Code routine fire (Cursor webhook fallback), instructions from section 10.
 2. Prepare button, pending flag, Supabase draft row.
-3. Telegram delivery of answers and LaTeX.
+3. Telegram delivery of answers and PDF (no `.tex`).
 4. PDF compile on Render if the image size allows.
 5. Question gaps asked in chat before the agent runs, when a required field has no approved answer.
 
@@ -584,9 +592,9 @@ Build in this order. Do not start the drafter before a poll can store a drive an
 2. Classification rules in section 5.6.
 3. Calendar create, update, and cancel, after the `subEvents` time format is checked against the app.
 
-### Phase 4 — Not required for you to use it
+### Phase 4 — Deferred
 
-A repo of commands and the placement CLI so the same drafts can be run in Claude Code or another Cursor account. State can stay in files for that copy. Do not block phases 1–3 on it.
+Portable kit / CLI (former M13) is deferred until explicitly revived. Do not block phases 1–3 on it.
 
 ### Onboarding tasks inside phase 1
 
@@ -616,7 +624,7 @@ These do not change the design. They change a branch of it if the live result di
 |---|---|
 | Automation | This system: the watcher, the board, the chat, and the on-demand drafter. |
 | Watcher | The Render process. No model. |
-| Drafter | The Cursor cloud agent started by Prepare. |
+| Drafter | The Claude Code routine (or Cursor webhook) started by Prepare. |
 | Drive | One object in `events[]`, keyed by top-level `_id`. |
 | Catalog | The eligibility list response. |
 | Platform | `placements.4gd.ai`. |

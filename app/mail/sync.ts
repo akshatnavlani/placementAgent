@@ -23,9 +23,11 @@ import { NotionClient } from "../notion/client.ts";
 import { TelegramClient } from "../telegram/client.ts";
 import { applyClassification } from "./applyClassification.ts";
 import { matchDrive } from "./matchDrive.ts";
+import { shouldProcessPlacementMail } from "./placementGate.ts";
 
+/** Prefer placement language; bare "offer" alone pulls casino/marketing spam. */
 const BOOTSTRAP_QUERY =
-  "(shortlist OR interview OR assessment OR offer OR rejected OR rejection OR selection OR shortlisted) newer_than:21d";
+  "(shortlist OR shortlisted OR (placement OR campus OR pesu OR recruitment) OR (interview AND (schedule OR scheduled OR invite OR round)) OR (assessment OR hackerrank OR hackerearth) OR (\"offer letter\" OR \"job offer\") OR (regret AND (inform OR shortlisted)) OR rejected) newer_than:21d -spins -casino -\"google store\"";
 const BOOTSTRAP_CAP = 50;
 
 export type MailSyncLogger = {
@@ -168,6 +170,21 @@ async function processMessage(
   );
 
   summary.processed += 1;
+
+  const gate = shouldProcessPlacementMail({
+    subject: msg.subject,
+    bodyText: msg.bodyText,
+    classified,
+    drives,
+  });
+  if (!gate.ok) {
+    summary.skipped += 1;
+    deps.log?.info?.(
+      { account, messageId, reason: gate.reason, classification: classified.classification },
+      "mail gated silent",
+    );
+    return;
+  }
 
   const chatId =
     deps.notify === false

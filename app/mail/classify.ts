@@ -90,7 +90,23 @@ const OFFER_CONFIRMED_RE = [
   /\bconfirmed\s+your\s+acceptance\b/i,
   /\bwelcome\s+aboard\b/i,
 ];
-const OFFER_RE = [/\boffer(?:ed|ing)?\b/i, /\bcongratulations\b[\s\S]{0,80}\boffer\b/i];
+/** Job-offer only — avoid marketing “special offer”, casino, store credit. */
+const OFFER_RE = [
+  /\b(?:job|placement|internship|ppo|full[- ]?time)\s+offer\b/i,
+  /\boffer\s+of\s+(?:employment|internship)\b/i,
+  /\b(?:employment|internship)\s+offer\b/i,
+  /\boffer\s+letter\b/i,
+  /\bcongratulations\b[\s\S]{0,80}\b(?:job\s+)?offer\b/i,
+  /\bwe\s+(?:are\s+)?(?:pleased|happy|delighted)\s+to\s+(?:extend|make|offer)\b/i,
+];
+const OFFER_NOISE_RE = [
+  /\bfree\s+spins?\b/i,
+  /\bcasino\b/i,
+  /\bsubscriber\s+benefit\b/i,
+  /\bgoogle\s+store\b/i,
+  /\bspecial\s+offer\b/i,
+  /\blimited[- ]time\s+offer\b/i,
+];
 const REJECTION_RE = [
   /\bnot\s+shortlisted\b/i,
   /\bregret\s+to\s+inform\b/i,
@@ -161,14 +177,16 @@ export function classifyRecruitmentMail(input: ClassifyInput): MailClassificatio
   }
 
   // Offer subtypes before generic offer.
-  if (hasAny(text, OFFER_CONFIRMED_RE)) {
-    return { classification: "offer_confirmed", confidence: "high", reason: "offer_confirmation" };
-  }
-  if (hasAny(text, OFFER_ACCEPT_YOU_RE) && hasAny(text, OFFER_RE)) {
-    return { classification: "offer_accepted", confidence: "high", reason: "student_acceptance" };
-  }
-  if (hasAny(text, OFFER_RE) || (/\bcongratulations\b/i.test(text) && /\boffer\b/i.test(text))) {
-    return { classification: "offer_received", confidence: "high", reason: "offer_keywords" };
+  if (!hasAny(text, OFFER_NOISE_RE)) {
+    if (hasAny(text, OFFER_CONFIRMED_RE)) {
+      return { classification: "offer_confirmed", confidence: "high", reason: "offer_confirmation" };
+    }
+    if (hasAny(text, OFFER_ACCEPT_YOU_RE) && hasAny(text, OFFER_RE)) {
+      return { classification: "offer_accepted", confidence: "high", reason: "student_acceptance" };
+    }
+    if (hasAny(text, OFFER_RE)) {
+      return { classification: "offer_received", confidence: "high", reason: "offer_keywords" };
+    }
   }
 
   if (hasAny(text, REJECTION_RE)) {

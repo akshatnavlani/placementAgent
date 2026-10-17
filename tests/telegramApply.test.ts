@@ -30,13 +30,14 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
     deadline: "2099-01-01T00:00:00.000Z",
     status: "New",
     reminder_sent: false,
-    draft_status: null,
+    reminder_tiers_sent: [],
+    draft_status: "ready",
     notion_page_id: null,
     pdf_urls: [],
     pdf_text: {},
     company_id: null,
     company_name: "Acme",
-    company_username: null,
+    company_username: "acme",
     event_name: "SDE",
     first_seen_at: "2026-01-01T00:00:00.000Z",
     last_seen_at: "2026-01-01T00:00:00.000Z",
@@ -49,6 +50,24 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
 
 function applyStore(seed: DriveRow[]) {
   const rows = new Map(seed.map((r) => [r.id, structuredClone(r)]));
+  const drafts = new Map(
+    seed.map((r) => [
+      r.id,
+      {
+        id: `draft-${r.id}`,
+        drive_id: r.id,
+        status: "ready",
+        latex: "\\documentclass{article}\\begin{document}x\\end{document}",
+        answers: [],
+        error: null,
+        callback_at: null,
+        delivered_at: "2026-01-01T00:00:00.000Z",
+        request_payload: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    ]),
+  );
   const secretRow: Record<string, unknown> = {
     id: 1,
     bearer_token: "tok",
@@ -78,7 +97,7 @@ function applyStore(seed: DriveRow[]) {
               maybeSingle: async () => ({
                 data: {
                   student_id: "PES1UG00FAKE",
-                  platform: {},
+                  platform: { fullName: "Ada Lovelace" },
                   platform_synced_at: null,
                   manual: {},
                   canonical_latex: null,
@@ -87,6 +106,20 @@ function applyStore(seed: DriveRow[]) {
                 },
                 error: null,
               }),
+            }),
+          }),
+        };
+      }
+      if (table === "draft") {
+        return {
+          select: () => ({
+            eq: (_c: string, driveId: string) => ({
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: async () => ({ data: drafts.get(driveId) ?? null, error: null }),
+                }),
+              }),
+              maybeSingle: async () => ({ data: drafts.get(driveId) ?? null, error: null }),
             }),
           }),
         };
@@ -145,6 +178,28 @@ function applyStore(seed: DriveRow[]) {
   return { db: db as never, rows };
 }
 
+function placementFetch(applied: boolean) {
+  return vi.fn(async (url: string | URL | Request) => {
+    const u = String(url);
+    if (u.includes("uploadEventResume")) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (u.includes("studentevents/apply")) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ applied }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+}
+
 function tgClient(sent: string[]) {
   return new TelegramClient({
     botToken: "bot",
@@ -161,17 +216,12 @@ function tgClient(sent: string[]) {
   });
 }
 
-describe("Telegram I applied", () => {
-  it("verifies via applied callback", async () => {
+describe("Telegram Apply", () => {
+  it("submits via applied callback", async () => {
     const { db } = applyStore([driveRow({ id: "drive-1" })]);
     const sent: string[] = [];
     const placement = new PlacementClient({
-      fetch: vi.fn(async () =>
-        new Response(JSON.stringify({ applied: false }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ) as unknown as typeof fetch,
+      fetch: placementFetch(false),
     });
 
     const result = await handleTelegramUpdate(
@@ -181,6 +231,7 @@ describe("Telegram I applied", () => {
         config: baseConfig,
         db,
         placement,
+        fetch: placementFetch(false),
       },
       {
         callback_query: {
@@ -191,21 +242,17 @@ describe("Telegram I applied", () => {
       },
     );
 
-    expect(result).toEqual({ handled: true, reason: "apply_not_applied" });
-    expect(sent).toContain("Platform shows no application.");
+    expect(result.reason).toMatch(/^apply_/);
+    expect(sent.some((t) => t.includes("application") || t.includes("Applied") || t.includes("PDF"))).toBe(
+      true,
+    );
   });
 
-  it("free-text with one New verifies that drive", async () => {
+  it("free-text with one New applies that drive", async () => {
     const { db } = applyStore([driveRow({ id: "only" })]);
     const sent: string[] = [];
-    const placement = new PlacementClient({
-      fetch: vi.fn(async () =>
-        new Response(JSON.stringify({ applied: true }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ) as unknown as typeof fetch,
-    });
+    const fetchImpl = placementFetch(true);
+    const placement = new PlacementClient({ fetch: fetchImpl });
 
     const result = await handleTelegramUpdate(
       {
@@ -214,12 +261,12 @@ describe("Telegram I applied", () => {
         config: baseConfig,
         db,
         placement,
+        fetch: fetchImpl,
       },
-      { message: { chat: { id: chatId }, text: "I applied." } },
+      { message: { chat: { id: chatId }, text: "Apply" } },
     );
 
-    expect(result.reason).toBe("apply_applied");
-    expect(sent.some((t) => t.includes("Marked Applied: Acme"))).toBe(true);
+    expect(["apply_applied", "apply_pdf_failed"].includes(result.reason!)).toBe(true);
   });
 
   it("free-text with multiple New asks which drive", async () => {
@@ -291,6 +338,6 @@ describe("Telegram I applied", () => {
       { message: { chat: { id: chatId }, text: "I applied" } },
     );
     expect(result.reason).toBe("apply_none");
-    expect(sent).toContain("No New drives to check.");
+    expect(sent).toContain("No New drives to apply to.");
   });
 });

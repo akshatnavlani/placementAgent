@@ -1,28 +1,22 @@
 import type { DbClient } from "../db/client.ts";
-import { listDrives, markAlerted, type DriveRow } from "../db/drive.ts";
+import { addReminderTiersSent, listDrives, type DriveRow } from "../db/drive.ts";
 import { driveActionKeyboard } from "../telegram/buttons.ts";
 import type { TelegramClient } from "../telegram/client.ts";
-import { formatDriveAlert, isUrgentDeadline, SIX_HOURS_MS } from "../telegram/format.ts";
+import { formatDriveAlert } from "../telegram/format.ts";
+import {
+  nextReminderTierToSend,
+  tierLabel,
+  type ReminderTierId,
+} from "./reminderTiers.ts";
 
 export type ReminderSummary = {
   reminded: number;
   alerts: string[];
 };
 
-function stillOpenBeforeDeadline(row: DriveRow, now: Date): boolean {
-  if (row.status !== "New" || row.reminder_sent || !row.deadline) {
-    return false;
-  }
-  const ms = Date.parse(row.deadline);
-  if (!Number.isFinite(ms)) {
-    return false;
-  }
-  const remaining = ms - now.getTime();
-  return remaining > 0 && remaining < SIX_HOURS_MS;
-}
-
 /**
- * One urgent reminder for New drives that entered the under-6h window after first alert.
+ * Multi-tier deadline reminders for New drives (12h / 6h / 3h / 1h / 30m).
+ * Prepare / draft status does not suppress. Applied / Skip / Not Applied stop via status !== New.
  */
 export async function sendDeadlineReminders(deps: {
   db: DbClient;
@@ -37,20 +31,26 @@ export async function sendDeadlineReminders(deps: {
   const rows = deps.listExisting ? await deps.listExisting() : await listDrives(deps.db);
 
   for (const row of rows) {
-    if (!stillOpenBeforeDeadline(row, now)) {
+    if (row.status !== "New" || !row.deadline) {
       continue;
     }
-    // isUrgentDeadline is the same window; keep shared helper as source of truth.
-    if (!isUrgentDeadline(row.deadline, now)) {
+    const due = nextReminderTierToSend(row.deadline, row.reminder_tiers_sent, now);
+    if (due.length === 0) {
       continue;
     }
-    const text = formatDriveAlert(row, { urgent: true });
+    // Fire the tightest due tier only (largest index = smallest window).
+    const tierId = due[due.length - 1] as ReminderTierId;
+    const text = formatDriveAlert(row, {
+      urgent: true,
+      urgentLabel: tierLabel(tierId),
+    });
     const sent = await deps.telegram.sendMessage(deps.chatId, text, driveActionKeyboard(row.id));
     if (!sent.ok) {
       alerts.push(`reminder_send:${row.id}`);
       continue;
     }
-    await markAlerted(deps.db, row.id, { reminderSent: true }, now);
+    // Mark all due tiers as sent so we don't backlog-spam after downtime.
+    await addReminderTiersSent(deps.db, row.id, due, now);
     reminded += 1;
   }
 

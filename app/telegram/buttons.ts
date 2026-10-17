@@ -60,9 +60,21 @@ export function driveActionKeyboard(driveId: string): Record<string, unknown> {
     inline_keyboard: [
       [
         { text: "Prepare", callback_data: encodeCallback("prepare", driveId) },
-        { text: "I applied", callback_data: encodeCallback("applied", driveId) },
+        { text: "Apply", callback_data: encodeCallback("applied", driveId) },
       ],
       [{ text: "Skip", callback_data: encodeCallback("skip", driveId) }],
+    ],
+  };
+}
+
+/** After draft delivery: Apply + Skip without Prepare (draft already done). */
+export function draftReadyKeyboard(driveId: string): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Apply", callback_data: encodeCallback("applied", driveId) },
+        { text: "Skip", callback_data: encodeCallback("skip", driveId) },
+      ],
     ],
   };
 }
@@ -73,7 +85,7 @@ export function approveKeyboard(): Record<string, unknown> {
   };
 }
 
-/** One I applied button per New drive (capped by caller). */
+/** One Apply button per New drive (capped by caller). */
 export function chooseDriveKeyboard(
   drives: Array<{ id: string; label: string }>,
 ): Record<string, unknown> {

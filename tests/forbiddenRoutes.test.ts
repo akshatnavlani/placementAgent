@@ -3,9 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+/** Routes still disallowed after M17 (Apply uses apply + uploadEventResume). */
 const forbidden = [
-  "studentevents/apply",
-  "studentevents/uploadEventResume",
   "students/uploadResume",
   "studentevents/unapply",
   "tokens/register-token",

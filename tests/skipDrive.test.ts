@@ -32,6 +32,7 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
     deadline: "2099-01-01T00:00:00.000Z",
     status: "New",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: [],
@@ -185,7 +186,7 @@ describe("driveActionKeyboard Skip", () => {
       inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
     };
     expect(kb.inline_keyboard).toHaveLength(2);
-    expect(kb.inline_keyboard[0]!.map((b) => b.text)).toEqual(["Prepare", "I applied"]);
+    expect(kb.inline_keyboard[0]!.map((b) => b.text)).toEqual(["Prepare", "Apply"]);
     expect(kb.inline_keyboard[1]).toEqual([{ text: "Skip", callback_data: "s:drive-1" }]);
   });
 });

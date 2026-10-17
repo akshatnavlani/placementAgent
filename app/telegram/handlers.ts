@@ -1,12 +1,12 @@
 import { skipDrive, skipReplyText } from "../apply/skip.ts";
-import { verifyApplied, verifyReplyText } from "../apply/verify.ts";
+import { submitApplication, submitReplyText } from "../apply/submit.ts";
 import { beginOtpAfterApprove, completeOtp, type OtpDeps } from "../auth/otp.ts";
 import type { Config } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
 import { listNewDrives } from "../db/drive.ts";
 import { getMailById } from "../db/mail.ts";
 import { loadFullProfile, loadPlatformProfile } from "../db/profile.ts";
-import { loadAuthState } from "../db/secret.ts";
+import { getPollReportsEnabled, loadAuthState, setPollReportsEnabled } from "../db/secret.ts";
 import {
   handlePrepareAskChoice,
   handlePrepareAskText,
@@ -80,6 +80,23 @@ export function isPollCommand(text: string): boolean {
   return /^\/?poll(?:@\w+)?\s*$/i.test(text.trim());
 }
 
+/** `/pollreports` [on|off] */
+export function parsePollReportsCommand(
+  text: string,
+): { kind: "status" } | { kind: "set"; enabled: boolean } | null {
+  const t = text.trim();
+  if (/^\/?pollreports(?:@\w+)?\s+on\s*$/i.test(t)) {
+    return { kind: "set", enabled: true };
+  }
+  if (/^\/?pollreports(?:@\w+)?\s+off\s*$/i.test(t)) {
+    return { kind: "set", enabled: false };
+  }
+  if (/^\/?pollreports(?:@\w+)?\s*$/i.test(t)) {
+    return { kind: "status" };
+  }
+  return null;
+}
+
 export function formatPollReply(poll: PollSummary): string {
   if (!poll.ok) {
     return `Poll failed: ${poll.alert ?? "unknown"}`;
@@ -100,7 +117,7 @@ export function formatPollReply(poll: PollSummary): string {
   return lines.join("\n");
 }
 
-const I_APPLIED_RE = /^\s*i\s*applied\s*[.!?]?\s*$/i;
+const I_APPLIED_RE = /^\s*(?:i\s*applied|apply)\s*[.!?]?\s*$/i;
 const SKIP_DRIVE_RE = /^\s*(won'?t\s+apply|wont\s+apply)\s*[.!?]?\s*$/i;
 /** Bare "skip" is reserved for onboarding field-skip when a wizard is active. */
 const SKIP_DRIVE_BARE_RE = /^\s*skip\s*[.!?]?\s*$/i;
@@ -124,14 +141,14 @@ function onboardingDeps(deps: HandleUpdateDeps) {
   };
 }
 
-async function runVerify(
+async function runApply(
   deps: HandleUpdateDeps,
   driveId: string,
 ): Promise<{ text: string; reason: string }> {
   if (!deps.config || !deps.db || !deps.placement) {
-    return { text: "Apply verify is not configured yet.", reason: "apply_unconfigured" };
+    return { text: "Apply is not configured yet.", reason: "apply_unconfigured" };
   }
-  const result = await verifyApplied(
+  const result = await submitApplication(
     {
       config: deps.config,
       db: deps.db,
@@ -139,10 +156,11 @@ async function runVerify(
       telegram: deps.telegram,
       chatId: deps.allowedChatId,
       log: deps.log,
+      fetch: deps.fetch,
     },
     driveId,
   );
-  return { text: verifyReplyText(result), reason: `apply_${result.kind}` };
+  return { text: submitReplyText(result), reason: `apply_${result.kind}` };
 }
 
 async function runSkip(
@@ -347,11 +365,11 @@ export async function handleTelegramUpdate(
       await deps.telegram.sendMessage(deps.allowedChatId, skipped.text);
       return { handled: true, reason: skipped.reason };
     }
-    // applied
-    await deps.telegram.answerCallbackQuery(callback.id, "Checking…");
-    const verified = await runVerify(deps, decoded.driveId);
-    await deps.telegram.sendMessage(deps.allowedChatId, verified.text);
-    return { handled: true, reason: verified.reason };
+    // applied / Apply
+    await deps.telegram.answerCallbackQuery(callback.id, "Applying…");
+    const applied = await runApply(deps, decoded.driveId);
+    await deps.telegram.sendMessage(deps.allowedChatId, applied.text);
+    return { handled: true, reason: applied.reason };
   }
 
   const message = update.message;
@@ -470,6 +488,32 @@ export async function handleTelegramUpdate(
       return { handled: true, reason: "profile_menu" };
     }
 
+    const pollReportsCmd = parsePollReportsCommand(text);
+    if (pollReportsCmd) {
+      if (!deps.db) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Poll reports not configured yet.");
+        return { handled: true, reason: "pollreports_unconfigured" };
+      }
+      if (pollReportsCmd.kind === "set") {
+        await setPollReportsEnabled(deps.db, pollReportsCmd.enabled);
+        await deps.telegram.sendMessage(
+          deps.allowedChatId,
+          pollReportsCmd.enabled
+            ? "Poll reports on — cron summaries will be sent here."
+            : "Poll reports off — cron summaries paused. Manual /poll still replies.",
+        );
+        return { handled: true, reason: pollReportsCmd.enabled ? "pollreports_on" : "pollreports_off" };
+      }
+      const on = await getPollReportsEnabled(deps.db);
+      await deps.telegram.sendMessage(
+        deps.allowedChatId,
+        on
+          ? "Poll reports are on. Send /pollreports off to pause."
+          : "Poll reports are off. Send /pollreports on to resume.",
+      );
+      return { handled: true, reason: "pollreports_status" };
+    }
+
     if (isPollCommand(text)) {
       if (!deps.config || (!deps.runManualPoll && (!deps.db || !deps.placement))) {
         await deps.telegram.sendMessage(deps.allowedChatId, "Poll is not configured yet.");
@@ -492,23 +536,23 @@ export async function handleTelegramUpdate(
 
     if (I_APPLIED_RE.test(text)) {
       if (!deps.db) {
-        await deps.telegram.sendMessage(deps.allowedChatId, "Apply verify is not configured yet.");
+        await deps.telegram.sendMessage(deps.allowedChatId, "Apply is not configured yet.");
         return { handled: true, reason: "apply_unconfigured" };
       }
       const news = await listNewDrives(deps.db);
       if (news.length === 0) {
-        await deps.telegram.sendMessage(deps.allowedChatId, "No New drives to check.");
+        await deps.telegram.sendMessage(deps.allowedChatId, "No New drives to apply to.");
         return { handled: true, reason: "apply_none" };
       }
       if (news.length === 1) {
-        const verified = await runVerify(deps, news[0]!.id);
-        await deps.telegram.sendMessage(deps.allowedChatId, verified.text);
-        return { handled: true, reason: verified.reason };
+        const applied = await runApply(deps, news[0]!.id);
+        await deps.telegram.sendMessage(deps.allowedChatId, applied.text);
+        return { handled: true, reason: applied.reason };
       }
       if (news.length > 8) {
         await deps.telegram.sendMessage(
           deps.allowedChatId,
-          "Tap I applied on the drive alert.",
+          "Tap Apply on the drive alert.",
         );
         return { handled: true, reason: "apply_too_many" };
       }

@@ -20,6 +20,7 @@ function row(partial: Partial<DriveRow> & { id: string }): DriveRow {
     deadline: null,
     status: "New",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: [],

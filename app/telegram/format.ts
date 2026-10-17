@@ -123,7 +123,10 @@ export function isUrgentDeadline(deadlineIso: string | null, now: Date = new Dat
   return remaining > 0 && remaining < SIX_HOURS_MS;
 }
 
-export function formatDriveAlert(row: DriveRow, options: { urgent?: boolean } = {}): string {
+export function formatDriveAlert(
+  row: DriveRow,
+  options: { urgent?: boolean; urgentLabel?: string } = {},
+): string {
   const source = row.raw_detail ?? row.raw_list;
   const jobInfo = asRecord(source.jobInfo);
   const company = pickString(row.company_name, source.companyName) ?? "Unknown company";
@@ -136,7 +139,8 @@ export function formatDriveAlert(row: DriveRow, options: { urgent?: boolean } = 
 
   const lines: string[] = [];
   if (options.urgent) {
-    lines.push("Deadline is close — under 6 hours left.");
+    const window = options.urgentLabel ?? "under 6 hours";
+    lines.push(`Deadline is close — ${window} left.`);
     lines.push("");
   }
   lines.push(company);

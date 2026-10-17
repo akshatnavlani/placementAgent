@@ -31,6 +31,7 @@ function store(opts: {
     deadline: null,
     status: "New",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: "ready",
     notion_page_id: null,
     pdf_urls: [],
@@ -105,7 +106,7 @@ function store(opts: {
 }
 
 describe("deliverReadyDraft", () => {
-  it("sends answers + tex and marks delivered when compile fails", async () => {
+  it("sends answers without tex and marks delivered when compile fails", async () => {
     const { db, draft } = store({ status: "ready" });
     const messages: string[] = [];
     const docs: string[] = [];
@@ -140,7 +141,7 @@ describe("deliverReadyDraft", () => {
     );
 
     expect(result.kind).toBe("delivered");
-    expect(docs.some((n) => n.endsWith(".tex"))).toBe(true);
+    expect(docs.some((n) => n.endsWith(".tex"))).toBe(false);
     expect(messages.some((m) => m.includes("Draft ready for Acme"))).toBe(true);
     expect(messages.some((m) => m.includes("City: BLR"))).toBe(true);
     expect(messages.some((m) => m.includes("PDF skipped"))).toBe(true);

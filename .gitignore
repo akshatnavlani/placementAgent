@@ -12,4 +12,7 @@ coverage/
 .private/
 resume/
 
+# Local mail repro dumps
+nomatch.txt
+
 .DS_Store

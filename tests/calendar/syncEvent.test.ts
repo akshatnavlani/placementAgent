@@ -23,6 +23,7 @@ function drive(overrides: Partial<DriveRow> = {}): DriveRow {
     deadline: "2026-12-01T00:00:00.000Z",
     status: "Applied",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: [],

@@ -22,6 +22,7 @@ function drive(): DriveRow {
     deadline: null,
     status: "Applied",
     reminder_sent: false,
+    reminder_tiers_sent: [],
     draft_status: null,
     notion_page_id: null,
     pdf_urls: [],

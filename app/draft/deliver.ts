@@ -3,6 +3,7 @@ import { hasTelegram, requireTelegram } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
 import { getLatestDraft, markDraftDelivered } from "../db/draft.ts";
 import { getDrive } from "../db/drive.ts";
+import { draftReadyKeyboard } from "../telegram/buttons.ts";
 import { TelegramClient } from "../telegram/client.ts";
 import { compileLatexToPdf, type CompileDeps } from "./compile.ts";
 import { formatAnswersList, parseAtsComments, sanitizeFilename } from "./formatAnswers.ts";
@@ -60,34 +61,25 @@ export async function deliverReadyDraft(
   const company = drive.company_name?.trim() || driveId;
   const fields = extractCustomFields(drive.raw_detail ?? drive.raw_list);
   const ats = parseAtsComments(draft.latex);
+  const keyboard = draftReadyKeyboard(driveId);
 
   const statusLines = [`Draft ready for ${company}.`];
   if (ats.match) {
     statusLines.push(`ATS match: ${ats.match}${ats.note ? ` — ${ats.note}` : ""}`);
   }
 
-  const sendText = async (text: string) => {
-    const r = await telegram.sendMessage(chatId, text.slice(0, 4000));
+  const sendText = async (text: string, replyMarkup?: Record<string, unknown>) => {
+    const r = await telegram.sendMessage(chatId, text.slice(0, 4000), replyMarkup);
     if (!r.ok) {
       throw new Error(r.reason);
     }
   };
 
   try {
-    await sendText(statusLines.join("\n"));
+    await sendText(statusLines.join("\n"), keyboard);
     await sendText(formatAnswersList(draft.answers, fields));
 
     const base = sanitizeFilename(company);
-    const texBytes = Buffer.from(draft.latex, "utf8");
-    const texSend = await telegram.sendDocument(chatId, {
-      filename: `${base}-resume.tex`,
-      bytes: texBytes,
-      contentType: "application/x-tex",
-    });
-    if (!texSend.ok) {
-      throw new Error(`tex send: ${texSend.reason}`);
-    }
-
     let pdfOk = false;
     const compiled = await compileLatexToPdf(draft.latex, driveId, {
       ...deps.compile,
@@ -102,10 +94,10 @@ export async function deliverReadyDraft(
       if (pdfSend.ok) {
         pdfOk = true;
       } else {
-        await sendText(`PDF skipped: ${pdfSend.reason}. Use the .tex file.`);
+        await sendText(`PDF skipped: ${pdfSend.reason}.`);
       }
     } else {
-      await sendText(`PDF skipped: ${compiled.reason}. Use the .tex file.`);
+      await sendText(`PDF skipped: ${compiled.reason}.`);
     }
 
     await markDraftDelivered(deps.db, driveId, deps.now ?? new Date());

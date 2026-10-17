@@ -15,12 +15,13 @@ Ship a personal placement automation that:
 
 1. Polls the PESU eligibility catalog every 5 minutes.
 2. Alerts eligible drives on Telegram and mirrors them to Notion.
-3. Reminds once when a New drive has under 6 hours left.
-4. Verifies “I applied” against the platform before marking Applied.
-5. On Prepare, starts a Cursor cloud agent that returns a tailored LaTeX resume and answers.
-6. Later classifies recruitment mail and updates the same board.
+3. Reminds at 12h / 6h / 3h / 1h / 30m before deadline while New.
+4. On **Apply**, uploads the PDF, submits via the platform, then verifies before marking Applied.
+5. On Prepare, starts a Claude Code routine (Cursor fallback) that returns a tailored LaTeX resume and answers; Telegram gets answers + PDF only.
+6. Classifies recruitment mail quietly (no spam notify) and updates the same board.
+7. Optionally posts cron poll summaries to Telegram (`/pollreports`).
 
-Version 1 ends at a reviewed draft. No placement submission, resume upload, WhatsApp, WebSocket, or Gemini API.
+No WhatsApp, WebSocket, or Gemini API. Portable kit (M13) is deferred.
 
 ---
 
@@ -52,7 +53,7 @@ These are defaults for speed on the free tiers already chosen. Swap only if a ha
 | Notion | Official Notion API | One database, create/update by stored page id |
 | Scheduler | cron-job.org, EasyCron, or GitHub Actions schedule calling the private URL | Must be inbound HTTP every 5 minutes |
 | Host | Render free web service | One service only |
-| Drafter | Cursor Automation, webhook trigger | Draft-only |
+| Drafter | Claude Code routine fire; Cursor webhook fallback | Draft-only |
 
 Do not spend design time debating frameworks. The architecture does not depend on Node vs Python.
 
@@ -545,22 +546,106 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 
 ---
 
-### M13 — Portable kit (optional)
+### M13 — Portable kit (**deferred**)
 
-**Goal.** Someone else (or you in Claude Code) can run prepare/check without your Render bot.
+**Status.** Deferred until explicitly revived. Do not start this milestone.
+
+**Goal (parked).** Someone else (or you in Claude Code) can run prepare/check without your Render bot via a small CLI and file-based profile/resume layout.
+
+---
+
+### M14 — Mail accuracy and silence
+
+**Goal.** Stop non-placement Telegram spam; restore PESU mail sync after token remint.
 
 **Work**
 
-1. Small CLI: login, list, detail, check-apply-status, using env secrets.
-2. Command docs: `/check`, `/prepare`, `/applied` style instructions for agent runners.
-3. File-based profile/resume layout inspired by ai-job-search’s structure, not a copy of their prompts.
-4. Explicit MIT/license review before publishing anything derived.
-5. Do not publish credentials, `routes.json` with secrets, or personal fixtures.
+1. Placement gate before notify/status: require classifier confidence + placement-shaped subject/body **or** strong company/role overlap with a stored drive.
+2. Never Telegram-notify `unresolved` / unmatched low-signal mail; ask “which drive?” only when classification is high-signal and match is genuinely ambiguous.
+3. Tighten `OFFER_RE` / bootstrap query (exclude marketing/casino patterns; prefer placement language).
+4. Gitignore `nomatch.txt`.
+5. Document remint steps for `GOOGLE_REFRESH_TOKEN_PESU` (and personal) against the same OAuth client as Render.
 
 **Exit criteria**
 
-- Fresh clone + env vars can list eligible drives.
-- An agent runner can produce a draft from CLI output without the Telegram bot.
+- `/poll` with mail sync produces at most drive alerts + legitimate stage mails.
+- Spam subjects from `nomatch.txt` no longer Telegram.
+- PESU bootstrap succeeds after token remint (ops).
+
+**Live notes (M14):** `app/mail/placementGate.ts` drops noise before apply/notify. Bootstrap query no longer uses bare `offer`. If logs show `mail_bootstrap_pesu: token refresh failed`, remint the PESU refresh token with `gmail.readonly` for the Render OAuth client and update Render env.
+
+---
+
+### M15 — Multi-tier deadline reminders
+
+**Goal.** Replace single under-6h reminder.
+
+**Work**
+
+1. Migration: `reminder_tiers_sent text[]` (replace boolean `reminder_sent` usage).
+2. Emit at most one message per crossed threshold: 12h → 6h → 3h → 1h → 30m while status is **New**.
+3. Clear/stop on Applied, Skip → Not Applied, or past deadline.
+4. Prepare / draft pending does **not** suppress reminders.
+5. Update alert copy and tests in `app/poll/reminders.ts`.
+
+**Exit criteria**
+
+- Fixture tests for each tier once; no duplicate same-tier; Skip/Applied stop further tiers.
+
+**Live notes (M15):** Tiers in `app/poll/reminderTiers.ts`. Discovery inside a window marks those tiers sent so first alert is not double-fired.
+
+---
+
+### M16 — Draft delivery UX
+
+**Goal.** Useful Telegram delivery after Prepare.
+
+**Work**
+
+1. `deliverReadyDraft`: stop sending `.tex`; keep answers + PDF (note if PDF compile failed).
+2. Inline keyboard on draft-ready: **Apply** + **Skip**.
+3. Keep free-text “I applied” working until M17 renames fully.
+
+**Exit criteria**
+
+- Draft message has Apply/Skip; no `.tex` document; PDF still arrives when tectonic works.
+
+---
+
+### M17 — Platform Apply
+
+**Goal.** Telegram **Apply** uploads PDF + submits + verifies.
+
+**Work**
+
+1. Overturn SoT “no submit / no upload.”
+2. `PlacementClient`: `uploadEventResume` (multipart) then `apply` JSON using `drive.id`, `company_username`, `event_name`, profile name/SRN, `customFieldResponses` from draft answers (map by label → platform field ids from `raw_detail.customFields`).
+3. Wire Telegram Apply (button + free-text) to: upload → apply → `checkApplyStatus`; mark Applied only when platform says applied; surface 403/409 errors.
+4. Rename UI copy from “I applied” → “Apply.”
+5. Fail closed if missing `company_username`, draft PDF, or required answers.
+
+**Exit criteria**
+
+- One real New drive: Prepare → Apply → card Applied without opening the app (or clear eligibility error).
+
+**Live notes (M17):** `app/apply/submit.ts`. `company_username` already on drive from eligibility catalog. Smoke: 201 + `applied: true`.
+
+---
+
+### M18 — Poll heartbeat reports
+
+**Goal.** Prove 5-minute cron is running; allow silence.
+
+**Work**
+
+1. After each successful cron `/cron/poll`, optionally send `formatPollReply` summary to Telegram.
+2. Persist toggle in `secret` settings (`poll_reports_enabled`, default **true**).
+3. Commands: `/pollreports` (status), `/pollreports off`, `/pollreports on`.
+4. Manual `/poll` always replies (unchanged).
+
+**Exit criteria**
+
+- With reports on, Telegram gets a summary ~every 5 minutes from Actions; `/pollreports off` stops them.
 
 ---
 
@@ -594,9 +679,13 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 | `NOTION_DATABASE_ID` | M4. Set at M0, when the database is created |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN_PESU` | M5, M11 |
 | `GOOGLE_REFRESH_TOKEN_PERSONAL` | M11, M12 (`gmail.readonly` + `calendar`) |
-| `CURSOR_WEBHOOK_URL` | M9 |
+| `CURSOR_WEBHOOK_URL` | M9 (fallback when Claude Code unset) |
 | `CURSOR_WEBHOOK_SECRET` | M9 |
 | `DRAFT_CALLBACK_SECRET` | M9 |
+| `CLAUDE_CODE_API_KEY` | M9+ (Claude Code routines API) |
+| `CLAUDE_CODE_ROUTINE_ID` | M9+ |
+| `CLAUDE_CODE_TRIGGER_ID` | M9+ |
+| `PUBLIC_BASE_URL` | M9+ (prepare-payload pointer URL) |
 
 ---
 
@@ -609,7 +698,9 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 | M3 | Dedup logic | Receive one alert |
 | M4 | Status transition guard | Card created; later stage not reverted |
 | M5 | State machine for approval / OTP timeout | Force logout week or revoke token |
-| M6 | Reminder once; apply true/false/fail | Apply in app, then button |
+| M6 / M15 / M17 | Reminder tiers; apply true/false/fail | Prepare → Apply on one live drive |
+| M14 | Placement gate drops spam fixtures | Remint PESU token if bootstrap fails |
+| M18 | — | Cron summary on; `/pollreports off` |
 | M7 | — | Laptop off for half a day |
 | M9–M10 | Payload redaction unit test | Full Prepare on Fidelity-like drive |
 | M11 | Message-id dedup | One real shortlist |
@@ -660,18 +751,17 @@ Watcher MVP (M7) is the first useful daily product. Version 1 (M10) is the first
 - [ ] Eligible drives → Telegram + Notion
 - [ ] Ineligible drives silent
 - [ ] Session renewal works (password and OTP branch)
-- [ ] I applied verified by platform
-- [ ] One 6-hour reminder
+- [ ] Apply verified by platform (upload + submit + check)
+- [ ] Multi-tier reminders (12h / 6h / 3h / 1h / 30m)
 - [ ] Deadline → Not Applied
-- [ ] No placement write APIs implemented
 
 ### Version 1 (ship gate B)
 
 - [ ] All of gate A
 - [ ] Onboarding profile + canonical LaTeX
-- [ ] Prepare → Cursor → answers + LaTeX in Telegram
+- [ ] Prepare → Claude Code / Cursor → answers + PDF in Telegram
 - [ ] Required question gaps asked first
-- [ ] Password/token never in Cursor payload
+- [ ] Password/token never in drafter payload
 - [ ] Source of truth still accurate
 
 ### Tracking complete (ship gate C)

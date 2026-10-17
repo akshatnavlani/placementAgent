@@ -158,3 +158,33 @@ export async function clearLoginWait(db: DbClient): Promise<void> {
     throw new Error(`secret clearLoginWait failed: ${error.message}`);
   }
 }
+
+/** Cron poll Telegram summaries; default true when unset. */
+export async function getPollReportsEnabled(db: DbClient): Promise<boolean> {
+  const { data, error } = await db
+    .from("secret")
+    .select("poll_reports_enabled")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`secret getPollReportsEnabled failed: ${error.message}`);
+  }
+  if (data?.poll_reports_enabled === false) {
+    return false;
+  }
+  return true;
+}
+
+export async function setPollReportsEnabled(db: DbClient, enabled: boolean): Promise<void> {
+  const { error } = await db.from("secret").upsert(
+    {
+      id: 1,
+      poll_reports_enabled: enabled,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (error) {
+    throw new Error(`secret setPollReportsEnabled failed: ${error.message}`);
+  }
+}
