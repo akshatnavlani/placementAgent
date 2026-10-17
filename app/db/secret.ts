@@ -188,3 +188,29 @@ export async function setPollReportsEnabled(db: DbClient, enabled: boolean): Pro
     throw new Error(`secret setPollReportsEnabled failed: ${error.message}`);
   }
 }
+
+export async function getLastCronAt(db: DbClient): Promise<string | null> {
+  const { data, error } = await db
+    .from("secret")
+    .select("last_cron_at")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`secret getLastCronAt failed: ${error.message}`);
+  }
+  return (data?.last_cron_at as string | null) ?? null;
+}
+
+export async function setLastCronAt(db: DbClient, at: Date = new Date()): Promise<void> {
+  const { error } = await db.from("secret").upsert(
+    {
+      id: 1,
+      last_cron_at: at.toISOString(),
+      updated_at: at.toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (error) {
+    throw new Error(`secret setLastCronAt failed: ${error.message}`);
+  }
+}

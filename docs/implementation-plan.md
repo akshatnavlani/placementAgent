@@ -647,6 +647,8 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 
 - With reports on, Telegram gets a summary ~every 5 minutes from Actions; `/pollreports off` stops them.
 
+**Live notes (M18):** Scheduled wake must live on the GitHub **default branch** (`main`); the workflow on `deploy` alone never runs on schedule. `/cron/poll` stamps `secret.last_cron_at`; `/pollreports` shows it. Manual `/poll` never counts as a report wake.
+
 ---
 
 ## 7. Cross-cutting work (every milestone)

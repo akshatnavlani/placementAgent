@@ -6,7 +6,12 @@ import type { DbClient } from "../db/client.ts";
 import { listNewDrives } from "../db/drive.ts";
 import { getMailById } from "../db/mail.ts";
 import { loadFullProfile, loadPlatformProfile } from "../db/profile.ts";
-import { getPollReportsEnabled, loadAuthState, setPollReportsEnabled } from "../db/secret.ts";
+import {
+  getLastCronAt,
+  getPollReportsEnabled,
+  loadAuthState,
+  setPollReportsEnabled,
+} from "../db/secret.ts";
 import {
   handlePrepareAskChoice,
   handlePrepareAskText,
@@ -494,12 +499,16 @@ export async function handleTelegramUpdate(
         await deps.telegram.sendMessage(deps.allowedChatId, "Poll reports not configured yet.");
         return { handled: true, reason: "pollreports_unconfigured" };
       }
+      const lastCron = await getLastCronAt(deps.db).catch(() => null);
+      const lastCronLine = lastCron
+        ? `Last Actions wake: ${lastCron}`
+        : "Last Actions wake: never (schedule must live on GitHub default branch main).";
       if (pollReportsCmd.kind === "set") {
         await setPollReportsEnabled(deps.db, pollReportsCmd.enabled);
         await deps.telegram.sendMessage(
           deps.allowedChatId,
           pollReportsCmd.enabled
-            ? "Poll reports on — cron summaries will be sent here."
+            ? `Poll reports on — summaries arrive after each GitHub Actions /cron/poll (~5 min), not from manual /poll.\n${lastCronLine}`
             : "Poll reports off — cron summaries paused. Manual /poll still replies.",
         );
         return { handled: true, reason: pollReportsCmd.enabled ? "pollreports_on" : "pollreports_off" };
@@ -508,8 +517,8 @@ export async function handleTelegramUpdate(
       await deps.telegram.sendMessage(
         deps.allowedChatId,
         on
-          ? "Poll reports are on. Send /pollreports off to pause."
-          : "Poll reports are off. Send /pollreports on to resume.",
+          ? `Poll reports are on. Send /pollreports off to pause.\n${lastCronLine}`
+          : `Poll reports are off. Send /pollreports on to resume.\n${lastCronLine}`,
       );
       return { handled: true, reason: "pollreports_status" };
     }

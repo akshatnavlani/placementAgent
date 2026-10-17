@@ -4,7 +4,7 @@ import type { Config } from "./config.ts";
 import { hasTelegram, requireSupabase, requireTelegram } from "./config.ts";
 import { createDbClient } from "./db/client.ts";
 import { getLatestPendingPayload } from "./db/draft.ts";
-import { getPollReportsEnabled } from "./db/secret.ts";
+import { getPollReportsEnabled, setLastCronAt } from "./db/secret.ts";
 import { assertDraftCallbackConfigured, draftCallbackBodySchema, handleDraftCallback } from "./draft/callback.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
@@ -69,6 +69,12 @@ export function buildServer(config: Config): FastifyInstance {
           try {
             const supabase = requireSupabase(config);
             const db = createDbClient(supabase.url, supabase.serviceRoleKey);
+            try {
+              await setLastCronAt(db);
+            } catch (stampErr) {
+              const reason = stampErr instanceof Error ? stampErr.message : "stamp failed";
+              request.log.warn({ reason }, "last_cron_at stamp skipped");
+            }
             reportsOn = await getPollReportsEnabled(db);
           } catch {
             reportsOn = true;
