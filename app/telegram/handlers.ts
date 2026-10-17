@@ -17,6 +17,7 @@ import { prepareDrive, prepareReplyText } from "../draft/prepare.ts";
 import { bindMailAndApply } from "../mail/applyClassification.ts";
 import { classifyRecruitmentMail, nameTokensFromProfile } from "../mail/classify.ts";
 import type { PlacementClient } from "../placement/client.ts";
+import { runPoll, type PollSummary } from "../poll/runPoll.ts";
 import {
   chooseDriveKeyboard,
   chooseSkipDriveKeyboard,
@@ -68,9 +69,36 @@ export type HandleUpdateDeps = {
   placement?: PlacementClient;
   /** After OTP restores session, optionally run a poll. */
   onSessionRestored?: () => void | Promise<void>;
+  /** Test seam / override for /poll. Defaults to runPoll with handler deps. */
+  runManualPoll?: () => Promise<PollSummary>;
   log?: OtpDeps["log"];
   fetch?: typeof globalThis.fetch;
 };
+
+/** `/poll` or `poll` (optional @bot suffix). */
+export function isPollCommand(text: string): boolean {
+  return /^\/?poll(?:@\w+)?\s*$/i.test(text.trim());
+}
+
+export function formatPollReply(poll: PollSummary): string {
+  if (!poll.ok) {
+    return `Poll failed: ${poll.alert ?? "unknown"}`;
+  }
+  const lines = [
+    "Poll done.",
+    `New: ${poll.inserted} · Updated: ${poll.refreshed} · Touched: ${poll.touched}`,
+    `Notified: ${poll.notified} · Details: ${poll.detailsFetched} · PDFs: ${poll.pdfsFetched}`,
+  ];
+  if (poll.reminded || poll.applyChecked || poll.markedApplied || poll.notApplied) {
+    lines.push(
+      `Reminders: ${poll.reminded} · Apply checks: ${poll.applyChecked} · Marked applied: ${poll.markedApplied} · Not applied: ${poll.notApplied}`,
+    );
+  }
+  if (poll.alerts.length > 0) {
+    lines.push(`Alerts: ${poll.alerts.slice(0, 5).join(", ")}`);
+  }
+  return lines.join("\n");
+}
 
 const I_APPLIED_RE = /^\s*i\s*applied\s*[.!?]?\s*$/i;
 const SKIP_DRIVE_RE = /^\s*(won'?t\s+apply|wont\s+apply)\s*[.!?]?\s*$/i;
@@ -440,6 +468,26 @@ export async function handleTelegramUpdate(
       }
       await showProfileMenu(onboardingDeps(deps));
       return { handled: true, reason: "profile_menu" };
+    }
+
+    if (isPollCommand(text)) {
+      if (!deps.config || (!deps.runManualPoll && (!deps.db || !deps.placement))) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Poll is not configured yet.");
+        return { handled: true, reason: "poll_unconfigured" };
+      }
+      await deps.telegram.sendMessage(deps.allowedChatId, "Polling…");
+      const poll = deps.runManualPoll
+        ? await deps.runManualPoll()
+        : await runPoll({
+            config: deps.config,
+            db: deps.db,
+            placement: deps.placement,
+            telegram: deps.telegram,
+            log: deps.log,
+            fetch: deps.fetch,
+          });
+      await deps.telegram.sendMessage(deps.allowedChatId, formatPollReply(poll));
+      return { handled: true, reason: poll.ok ? "poll_ok" : "poll_failed" };
     }
 
     if (I_APPLIED_RE.test(text)) {
