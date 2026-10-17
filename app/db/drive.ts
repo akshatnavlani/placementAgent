@@ -337,6 +337,67 @@ export async function markApplied(db: DbClient, id: string, now: Date = new Date
   return Array.isArray(data) && data.length > 0;
 }
 
+/**
+ * Historical import: set Applied from New, null, or Not Applied.
+ * Does not touch Assessment / Interview / Accepted / Rejected.
+ */
+export async function markAppliedFromImport(
+  db: DbClient,
+  id: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const row = await getDrive(db, id);
+  if (!row) {
+    return false;
+  }
+  if (row.status === "Applied" || row.status === "Assessment" || row.status === "Interview" || row.status === "Accepted" || row.status === "Rejected") {
+    const iso = now.toISOString();
+    const { error: touchErr } = await db
+      .from("drive")
+      .update({ last_apply_check_at: iso, updated_at: iso })
+      .eq("id", id);
+    if (touchErr) {
+      throw new Error(`drive markAppliedFromImport touch failed: ${touchErr.message}`);
+    }
+    return false;
+  }
+  const iso = now.toISOString();
+  const { data, error } = await db
+    .from("drive")
+    .update({
+      status: "Applied",
+      applied_at: row.applied_at ?? iso,
+      last_apply_check_at: iso,
+      updated_at: iso,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) {
+    throw new Error(`drive markAppliedFromImport failed: ${error.message}`);
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+/** Stamp applied_at when inserting already-Applied rows from getAppliedEvents. */
+export async function stampAppliedTimestamps(
+  db: DbClient,
+  id: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const iso = now.toISOString();
+  const { error } = await db
+    .from("drive")
+    .update({
+      applied_at: iso,
+      last_apply_check_at: iso,
+      updated_at: iso,
+    })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive stampAppliedTimestamps failed: ${error.message}`);
+  }
+}
+
 export async function markApplyChecked(db: DbClient, id: string, now: Date = new Date()): Promise<void> {
   const { error } = await db
     .from("drive")

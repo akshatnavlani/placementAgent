@@ -1,0 +1,17 @@
+{
+  "appliedEvents": [
+    {
+      "eventID": "evt-applied-1",
+      "companyName": "Acme Corp",
+      "eventName": "SDE Intern",
+      "companyUsername": "acme",
+      "selectionStatus": "applied"
+    },
+    {
+      "eventID": "evt-placed-1",
+      "companyName": "Beta Ltd",
+      "eventName": "Analyst",
+      "selectionStatus": "placed"
+    }
+  ]
+}

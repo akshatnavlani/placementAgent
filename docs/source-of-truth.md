@@ -122,6 +122,7 @@ Confirmed means agreed in design. Verified means seen in a live response or in c
 | First alert inside a window marks those tiers sent so discovery does not double-fire | Confirmed |
 | Mail: notify only high-signal placement classifications with a drive match (or genuine ambiguous ask). Never notify unresolved spam. | Confirmed |
 | Cron poll Telegram summaries on by default; `/pollreports off` pauses them | Confirmed |
+| Historical applied import on profile Looks good + `/syncapplied` | Confirmed |
 | After the deadline with no application, status is Not Applied | Confirmed |
 | A card you have moved to Assessment or later is not moved back to New by a poll | Confirmed |
 
@@ -371,7 +372,7 @@ Nested `_id` values on the job, rounds, questions, and sub-events are not the dr
 | `POST students/sendOtp` | OTP branch only, after you approve | Body `studentID`. Password-reset must send `purpose: "passwordReset"` and must not be used here. |
 | `POST students/verifyOtp` | Completes the OTP branch | Returns a token on the login path |
 | `POST studentevents/getApplicationDetails` | Optional read-back | Not required for version 1 if check-apply-status is enough |
-| `POST studentevents/getAppliedEvents` | Optional daily alternative to per-drive checks | One screen also reads `selectionStatus` of `placed` or `selected`. Unknown values stay unresolved. Do not map them to Rejected. |
+| `POST studentevents/getAppliedEvents` | Profile complete + `/syncapplied` historical import | Upserts Applied (or Accepted when `selectionStatus` is placed/selected). Quiet mail pass afterward. Daily New checks still use `checkApplyStatus`. |
 
 The OTP-required JSON body has not been captured. Build the branch as “token present” versus “token absent,” and adjust when a real OTP response is saved.
 

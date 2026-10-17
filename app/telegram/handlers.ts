@@ -1,3 +1,4 @@
+import { importAppliedEvents, importAppliedReplyText } from "../apply/importApplied.ts";
 import { skipDrive, skipReplyText } from "../apply/skip.ts";
 import { submitApplication, submitReplyText } from "../apply/submit.ts";
 import { beginOtpAfterApprove, completeOtp, type OtpDeps } from "../auth/otp.ts";
@@ -172,6 +173,41 @@ function onboardingDeps(deps: HandleUpdateDeps) {
     chatId: deps.allowedChatId,
     fetch: deps.fetch,
     log: deps.log,
+    afterProfileSaved:
+      deps.config && deps.db && deps.placement
+        ? async () => {
+            await deps.telegram.sendMessage(deps.allowedChatId, "Importing past applications…");
+            const summary = await importAppliedEvents({
+              config: deps.config!,
+              db: deps.db!,
+              placement: deps.placement!,
+              telegram: deps.telegram,
+              chatId: deps.allowedChatId,
+              log: deps.log,
+              fetch: deps.fetch,
+            });
+            await deps.telegram.sendMessage(deps.allowedChatId, importAppliedReplyText(summary));
+          }
+        : undefined,
+  };
+}
+
+async function runSyncApplied(deps: HandleUpdateDeps): Promise<{ text: string; reason: string }> {
+  if (!deps.config || !deps.db || !deps.placement) {
+    return { text: "Sync applied is not configured yet.", reason: "syncapplied_unconfigured" };
+  }
+  const summary = await importAppliedEvents({
+    config: deps.config,
+    db: deps.db,
+    placement: deps.placement,
+    telegram: deps.telegram,
+    chatId: deps.allowedChatId,
+    log: deps.log,
+    fetch: deps.fetch,
+  });
+  return {
+    text: importAppliedReplyText(summary),
+    reason: summary.ok ? "syncapplied_ok" : "syncapplied_failed",
   };
 }
 
@@ -507,6 +543,13 @@ export async function handleTelegramUpdate(
     if (isHelpCommand(text)) {
       await deps.telegram.sendMessage(deps.allowedChatId, formatHelpReply());
       return { handled: true, reason: "help" };
+    }
+
+    if (isSyncAppliedCommand(text)) {
+      await deps.telegram.sendMessage(deps.allowedChatId, "Importing past applications…");
+      const synced = await runSyncApplied(deps);
+      await deps.telegram.sendMessage(deps.allowedChatId, synced.text);
+      return { handled: true, reason: synced.reason };
     }
 
     const profileCmd = isProfileCommand(text);

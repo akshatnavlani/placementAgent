@@ -25,6 +25,8 @@ export type OnboardingDeps = {
     info?: (obj: Record<string, unknown>, msg?: string) => void;
     warn?: (obj: Record<string, unknown>, msg?: string) => void;
   };
+  /** After Looks good — import past applications (fail soft). */
+  afterProfileSaved?: () => Promise<void>;
 };
 
 export function profileMenuKeyboard(): Record<string, unknown> {
@@ -237,6 +239,18 @@ async function commitLooksGood(deps: OnboardingDeps, state: OnboardingState): Pr
     deps.chatId,
     "Profile saved. Run /profile anytime to change it.",
   );
+  if (deps.afterProfileSaved) {
+    try {
+      await deps.afterProfileSaved();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "import failed";
+      deps.log?.warn?.({ reason: message }, "afterProfileSaved failed");
+      await deps.telegram.sendMessage(
+        deps.chatId,
+        "Profile saved, but importing past applications failed. Try /syncapplied later.",
+      );
+    }
+  }
 }
 
 async function goReview(deps: OnboardingDeps, state: OnboardingState): Promise<void> {

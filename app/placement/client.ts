@@ -80,7 +80,76 @@ export type ApplyStatus = {
   raw: Record<string, unknown>;
 };
 
+export type AppliedEventItem = {
+  eventId: string;
+  selectionStatus: string | null;
+  companyName: string | null;
+  eventName: string | null;
+  companyUsername: string | null;
+  raw: Record<string, unknown>;
+};
+
 export type StudentProfile = Record<string, unknown>;
+
+/** Exported for tests. */
+export function parseAppliedEventsPayload(json: unknown): AppliedEventItem[] | null {
+  let rows: unknown;
+  if (Array.isArray(json)) {
+    rows = json;
+  } else if (json && typeof json === "object" && !Array.isArray(json)) {
+    const obj = json as Record<string, unknown>;
+    if (Array.isArray(obj.appliedEvents)) {
+      rows = obj.appliedEvents;
+    } else if (Array.isArray(obj.events)) {
+      rows = obj.events;
+    } else {
+      return null;
+    }
+  } else {
+    return null;
+  }
+
+  const out: AppliedEventItem[] = [];
+  for (const row of rows as unknown[]) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      continue;
+    }
+    const rec = row as Record<string, unknown>;
+    const idRaw = rec.eventID ?? rec.eventId ?? rec._id ?? rec.id;
+    if (typeof idRaw !== "string" || idRaw.trim() === "") {
+      continue;
+    }
+    const company =
+      (typeof rec.companyName === "string" && rec.companyName) ||
+      (typeof rec.company === "string" && rec.company) ||
+      null;
+    const eventName =
+      (typeof rec.eventName === "string" && rec.eventName) ||
+      (typeof rec.name === "string" && rec.name) ||
+      null;
+    const companyUsername =
+      typeof rec.companyUsername === "string" ? rec.companyUsername : null;
+    const selectionStatus =
+      typeof rec.selectionStatus === "string" ? rec.selectionStatus : null;
+    out.push({
+      eventId: idRaw.trim(),
+      selectionStatus,
+      companyName: company,
+      eventName,
+      companyUsername,
+      raw: rec,
+    });
+  }
+  return out;
+}
+
+export function appliedSelectionWantsAccepted(selectionStatus: string | null): boolean {
+  if (!selectionStatus) {
+    return false;
+  }
+  const s = selectionStatus.toLowerCase();
+  return s === "placed" || s === "selected";
+}
 
 function parseRetryAfter(header: string | null): number | undefined {
   if (!header) {
@@ -410,6 +479,33 @@ export class PlacementClient {
         return raw;
       }
       return { kind: "ok", data: { status: raw.data.status } };
+    });
+  }
+
+  /**
+   * Historical applications. Body `{ studentID }`.
+   * Response may be `{ appliedEvents: [...] }` or a bare array.
+   */
+  getAppliedEvents(
+    token: string,
+    studentID: string,
+  ): Promise<PlacementOutcome<AppliedEventItem[]>> {
+    return this.enqueue(async () => {
+      const raw = await this.request("getAppliedEvents", {
+        method: "POST",
+        path: "studentevents/getAppliedEvents",
+        body: { studentID },
+        token,
+        clearTokenOn401: true,
+      });
+      if (raw.kind !== "ok") {
+        return raw;
+      }
+      const items = parseAppliedEventsPayload(raw.data.json);
+      if (items === null) {
+        return { kind: "invalid", reason: "getAppliedEvents schema mismatch" };
+      }
+      return { kind: "ok", data: items };
     });
   }
 
