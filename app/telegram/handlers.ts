@@ -85,6 +85,35 @@ export function isPollCommand(text: string): boolean {
   return /^\/?poll(?:@\w+)?\s*$/i.test(text.trim());
 }
 
+/** `/help` */
+export function isHelpCommand(text: string): boolean {
+  return /^\/?help(?:@\w+)?\s*$/i.test(text.trim());
+}
+
+export function formatHelpReply(): string {
+  return [
+    "Commands:",
+    "/help — this list",
+    "/poll — pull eligible drives + mail now",
+    "/pollreports — cron summary status (Actions wake ~every 5 min)",
+    "/pollreports on|off — enable or pause cron summaries",
+    "/profile — onboarding / resume menu",
+    "/profile redo — restart profile wizard",
+    "/profile latex — replace canonical LaTeX only",
+    "/syncapplied — import past platform applications into Notion",
+    "",
+    "Buttons / free text:",
+    "Prepare — draft resume + answers for a New drive",
+    "Apply — upload PDF, submit, verify on the platform",
+    "Skip — mark New as Not Applied",
+  ].join("\n");
+}
+
+/** `/syncapplied` */
+export function isSyncAppliedCommand(text: string): boolean {
+  return /^\/?syncapplied(?:@\w+)?\s*$/i.test(text.trim());
+}
+
 /** `/pollreports` [on|off] */
 export function parsePollReportsCommand(
   text: string,
@@ -473,6 +502,11 @@ export async function handleTelegramUpdate(
       if (consumed) {
         return { handled: true, reason: "onboarding" };
       }
+    }
+
+    if (isHelpCommand(text)) {
+      await deps.telegram.sendMessage(deps.allowedChatId, formatHelpReply());
+      return { handled: true, reason: "help" };
     }
 
     const profileCmd = isProfileCommand(text);
