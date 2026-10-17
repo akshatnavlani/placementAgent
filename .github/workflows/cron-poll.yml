@@ -22,11 +22,19 @@ jobs:
             exit 1
           fi
           url="${WATCHER_URL%/}/cron/poll"
-          code=$(curl -sS -o /tmp/poll-body.json -w "%{http_code}" -X POST "$url" \
-            -H "Authorization: Bearer ${CRON_SHARED_SECRET}" \
-            -H "Content-Type: application/json" \
-            -d '{}')
-          echo "status=${code}"
+          # Free Render cold-starts often return 502 on the first hit — retry briefly.
+          code="000"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS -o /tmp/poll-body.json -w "%{http_code}" -X POST "$url" \
+              -H "Authorization: Bearer ${CRON_SHARED_SECRET}" \
+              -H "Content-Type: application/json" \
+              -d '{}' || true)
+            echo "attempt=${attempt} status=${code}"
+            if [ "$code" = "202" ]; then
+              break
+            fi
+            sleep 15
+          done
           head -c 500 /tmp/poll-body.json || true
           echo
           test "$code" = "202"
