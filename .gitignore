@@ -12,7 +12,8 @@ coverage/
 .private/
 resume/
 
-# Local mail repro dumps
+# Local mail repro dumps / PESU .eml corpus (fixtures are under tests/)
 nomatch.txt
+Mails/
 
 .DS_Store

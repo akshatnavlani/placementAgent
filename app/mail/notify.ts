@@ -46,6 +46,7 @@ export function formatStageChange(
   classification: MailClassification,
   reason: string,
   calendar?: SyncEventResult | null,
+  subject?: string | null,
 ): string {
   const label = drive
     ? `${drive.company_name ?? "Unknown"} — ${drive.event_name ?? "role"}`
@@ -88,6 +89,12 @@ export function formatStageChange(
       break;
     default:
       base = `Mail update: ${label}\n(${reason})`;
+  }
+
+  const subj = subject?.trim();
+  if (subj) {
+    const truncated = subj.length > 80 ? `${subj.slice(0, 77)}...` : subj;
+    base = `${base}\nSubject: ${truncated}`;
   }
 
   const calLine = formatCalendarLine(calendar);

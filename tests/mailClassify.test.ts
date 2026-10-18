@@ -4,9 +4,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   classifyRecruitmentMail,
+  isStrongOfferReason,
   namePresentInText,
   nameTokensFromProfile,
 } from "../app/mail/classify.ts";
+import {
+  isActionableMailClassification,
+  looksLikeMarketingNoise,
+  shouldProcessPlacementMail,
+} from "../app/mail/placementGate.ts";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "mail");
 
@@ -24,7 +30,7 @@ function load(name: string): Fixture {
 describe("classifyRecruitmentMail", () => {
   it("loads all mail fixtures", () => {
     const files = readdirSync(fixturesDir).filter((f) => f.endsWith(".json"));
-    expect(files.length).toBeGreaterThanOrEqual(9);
+    expect(files.length).toBeGreaterThanOrEqual(16);
   });
 
   it("detects shortlist with name present", () => {
@@ -77,6 +83,74 @@ describe("classifyRecruitmentMail", () => {
     expect(classifyRecruitmentMail(load("reschedule.json")).classification).toBe("reschedule");
   });
 
+  it("ignores campus UPO blasts even when body mentions interview", () => {
+    const r = classifyRecruitmentMail(load("upo_ignore.json"));
+    expect(r.classification).toBe("unresolved");
+    expect(r.reason).toBe("campus_upo_blast");
+    expect(looksLikeMarketingNoise(load("upo_ignore.json").subject, load("upo_ignore.json").bodyText)).toBe(
+      true,
+    );
+  });
+
+  it("ignores OTP / system noise", () => {
+    const r = classifyRecruitmentMail(load("otp_ignore.json"));
+    expect(r.classification).toBe("unresolved");
+    expect(r.reason).toBe("system_noise");
+  });
+
+  it("maps interview-qualified shortlist to interview", () => {
+    const r = classifyRecruitmentMail(load("ather_interview_shortlist.json"));
+    expect(r.classification).toBe("interview");
+    expect(r.reason).toBe("shortlist_interview_qualified");
+  });
+
+  it("maps Accenture candidature rejection", () => {
+    const r = classifyRecruitmentMail(load("accenture_rejection.json"));
+    expect(r.classification).toBe("rejection");
+  });
+
+  it("maps assessment invitation", () => {
+    const r = classifyRecruitmentMail(load("assessment_invitation.json"));
+    expect(r.classification).toBe("assessment");
+  });
+
+  it("maps Tejas postponed as reschedule", () => {
+    const r = classifyRecruitmentMail(load("tejas_postponed.json"));
+    expect(r.classification).toBe("reschedule");
+  });
+
+  it("maps strong offer-ack body as offer_received with strong reason", () => {
+    const r = classifyRecruitmentMail(load("offer_ack_body.json"));
+    expect(r.classification).toBe("offer_received");
+    expect(isStrongOfferReason(r.reason)).toBe(true);
+    expect(isActionableMailClassification(r)).toBe(true);
+  });
+
+  it("treats weak keyword offers as non-actionable", () => {
+    const r = classifyRecruitmentMail(load("offer_received.json"));
+    expect(r.classification).toBe("offer_received");
+    expect(r.reason).toBe("offer_keywords_weak");
+    expect(isStrongOfferReason(r.reason)).toBe(false);
+    expect(isActionableMailClassification(r)).toBe(false);
+  });
+
+  it("notifies PESU cell shortlist without name as shortlist_present", () => {
+    const r = classifyRecruitmentMail(load("pesu_cell_shortlist.json"));
+    expect(r.classification).toBe("shortlist_present");
+    expect(r.reason).toBe("pesu_cell_shortlist");
+    expect(r.namePresent).toBe(false);
+  });
+
+  it("does not classify bare interview alone outside schedule phrases", () => {
+    const r = classifyRecruitmentMail({
+      subject: "Company update",
+      snippet: "",
+      bodyText: "We look forward to the interview experience on campus someday.",
+      studentNameTokens: ["ada", "lovelace"],
+    });
+    expect(r.classification).toBe("unresolved");
+  });
+
   it("extracts name tokens from profile", () => {
     expect(nameTokensFromProfile({ fullName: "Ada Lovelace" })).toEqual(["ada", "lovelace"]);
   });
@@ -84,5 +158,20 @@ describe("classifyRecruitmentMail", () => {
   it("matches name tokens in text", () => {
     expect(namePresentInText("Ada Lovelace shortlisted", ["ada", "lovelace"])).toBe(true);
     expect(namePresentInText("Alan Turing only", ["ada", "lovelace"])).toBe(false);
+  });
+
+  it("gates UPO as marketing noise even with drives present", () => {
+    const f = load("upo_ignore.json");
+    const classified = classifyRecruitmentMail(f);
+    const gate = shouldProcessPlacementMail({
+      subject: f.subject,
+      bodyText: f.bodyText,
+      classified,
+      drives: [],
+    });
+    expect(gate.ok).toBe(false);
+    if (!gate.ok) {
+      expect(gate.reason).toBe("marketing_noise");
+    }
   });
 });

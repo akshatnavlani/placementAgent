@@ -25,9 +25,9 @@ import { applyClassification } from "./applyClassification.ts";
 import { matchDrive } from "./matchDrive.ts";
 import { shouldProcessPlacementMail } from "./placementGate.ts";
 
-/** Prefer placement language; bare "offer" alone pulls casino/marketing spam. */
+/** Prefer PESU cell senders + stage keywords; exclude UPO discovery blasts and bare "offer". */
 const BOOTSTRAP_QUERY =
-  "(shortlist OR shortlisted OR (placement OR campus OR pesu OR recruitment) OR (interview AND (schedule OR scheduled OR invite OR round)) OR (assessment OR hackerrank OR hackerearth) OR (\"offer letter\" OR \"job offer\") OR (regret AND (inform OR shortlisted)) OR rejected) newer_than:21d -spins -casino -\"google store\"";
+  "(from:(pesuplacements@pes.edu OR placementsupport@pes.edu) OR shortlist OR shortlisted OR (interview AND (schedule OR scheduled OR invite OR round OR tomorrow OR shortlist)) OR (assessment OR \"online assessment\" OR hackerrank OR hackerearth OR \"written test\") OR (\"offer letter\" OR \"job offer\" OR \"final selects\" OR candidature) OR (regret AND (inform OR shortlisted)) OR rejected OR postponed) newer_than:21d -subject:\"Upcoming Placement Opportunity\" -spins -casino -\"google store\"";
 const BOOTSTRAP_CAP = 50;
 
 export type MailSyncLogger = {

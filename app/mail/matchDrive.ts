@@ -7,6 +7,31 @@ const MATCHABLE: ReadonlySet<DriveStatus> = new Set([
   "Accepted",
 ]);
 
+/** Tokens too common to count as a company hit alone. */
+const STOP = new Set([
+  "the",
+  "and",
+  "for",
+  "pvt",
+  "ltd",
+  "limited",
+  "private",
+  "india",
+  "pes",
+  "pesu",
+  "university",
+  "campus",
+  "drive",
+  "internship",
+  "intern",
+  "engineer",
+  "software",
+  "graduate",
+  "trainee",
+  "member",
+  "technical",
+]);
+
 export type DriveMatchCandidate = {
   drive: DriveRow;
   score: number;
@@ -32,8 +57,13 @@ function tokens(text: string): string[] {
     .filter((t) => t.length >= 2);
 }
 
+function significantTokens(text: string): string[] {
+  return tokens(text).filter((t) => !STOP.has(t) && t.length >= 3);
+}
+
+/** Exact token overlap only (no substring soft match). */
 function overlapScore(hayTokens: Set<string>, needle: string): number {
-  const parts = tokens(needle);
+  const parts = significantTokens(needle);
   if (parts.length === 0) {
     return 0;
   }
@@ -41,22 +71,37 @@ function overlapScore(hayTokens: Set<string>, needle: string): number {
   for (const p of parts) {
     if (hayTokens.has(p)) {
       hits += 1;
-    } else {
-      // substring soft match for compound company names
-      for (const h of hayTokens) {
-        if (h.includes(p) || p.includes(h)) {
-          hits += 0.5;
-          break;
-        }
-      }
     }
   }
   return hits / parts.length;
 }
 
+function companyPresent(hay: string, hayTokens: Set<string>, company: string, username: string): boolean {
+  const companyParts = significantTokens(company);
+  if (companyParts.length > 0) {
+    const hits = companyParts.filter((p) => hayTokens.has(p)).length;
+    // Need majority of significant company tokens, or full company phrase in hay.
+    if (hits >= Math.ceil(companyParts.length * 0.6) && hits >= 1) {
+      return true;
+    }
+    const phrase = normalize(company);
+    if (phrase.length >= 4 && hay.includes(phrase)) {
+      return true;
+    }
+  }
+  if (username) {
+    const u = normalize(username);
+    if (u.length >= 3 && (hayTokens.has(u) || hay.includes(u))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Score company + role overlap in subject+body.
- * Match among Applied+; New only when exactly one New matches company+role strongly.
+ * Match among Applied+; New only when exactly one New matches company strongly.
+ * Requires a clear company (or username) presence — no fuzzy substring latch.
  */
 export function matchDrive(
   drives: DriveRow[],
@@ -73,6 +118,9 @@ export function matchDrive(
     const company = drive.company_name ?? "";
     const username = drive.company_username ?? "";
     const role = drive.event_name ?? "";
+    if (!companyPresent(hay, hayTokens, company, username)) {
+      continue;
+    }
     let score = 0;
     if (company) {
       score += 3 * overlapScore(hayTokens, company);
@@ -81,13 +129,10 @@ export function matchDrive(
       score += 2 * overlapScore(hayTokens, username);
     }
     if (role) {
-      score += 2 * overlapScore(hayTokens, role);
+      score += 1.5 * overlapScore(hayTokens, role);
     }
-    // Require some company signal
-    const companyHit =
-      (company && overlapScore(hayTokens, company) > 0) ||
-      (username && overlapScore(hayTokens, username) > 0);
-    if (!companyHit || score < 1.5) {
+    // Floor: company must contribute real score.
+    if (score < 1.8) {
       continue;
     }
     scored.push({ drive, score });
@@ -100,22 +145,26 @@ export function matchDrive(
   }
   if (scored.length >= 2) {
     const top = scored[0]!.score;
-    const clear = scored.filter((c) => c.score >= top - 0.25 && c.score >= 2);
+    const clear = scored.filter((c) => c.score >= top - 0.25 && c.score >= 2.2);
     if (clear.length === 1) {
       return { kind: "one", drive: clear[0]!.drive, score: clear[0]!.score };
     }
     return { kind: "many", candidates: clear.length > 0 ? clear : scored.slice(0, 5) };
   }
 
-  // Fallback: exactly one New with strong company+role match (early shortlist).
+  // Fallback: exactly one New with strong company match.
   const news = drives.filter((d) => d.status === "New");
   const newScored: DriveMatchCandidate[] = [];
   for (const drive of news) {
     const company = drive.company_name ?? "";
+    const username = drive.company_username ?? "";
     const role = drive.event_name ?? "";
+    if (!companyPresent(hay, hayTokens, company, username)) {
+      continue;
+    }
     const companyScore = company ? overlapScore(hayTokens, company) : 0;
     const roleScore = role ? overlapScore(hayTokens, role) : 0;
-    if (companyScore < 0.8) {
+    if (companyScore < 0.6) {
       continue;
     }
     const score = 3 * companyScore + 2 * roleScore;

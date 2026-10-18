@@ -103,6 +103,9 @@ describe("applyClassification notify idempotency", () => {
     );
     expect(first.notified).toBe(true);
     expect(sendMessage).toHaveBeenCalledTimes(1);
+    const text = String(sendMessage.mock.calls[0]?.[1] ?? "");
+    expect(text).toContain("Subject: Interview");
+    expect(text).toContain("Acme");
 
     const second = await applyClassification(
       { config, db, telegram, chatId: "1" },

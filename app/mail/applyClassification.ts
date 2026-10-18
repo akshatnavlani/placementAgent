@@ -21,7 +21,7 @@ import { NotionClient } from "../notion/client.ts";
 import { syncDrive } from "../notion/sync.ts";
 import type { TelegramClient } from "../telegram/client.ts";
 import { chooseMailDriveKeyboard } from "../telegram/buttons.ts";
-import type { MailClassificationResult } from "./classify.ts";
+import { isStrongOfferReason, type MailClassificationResult } from "./classify.ts";
 import { isActionableMailClassification } from "./placementGate.ts";
 import { driveChoiceLabel, formatAmbiguousMail, formatStageChange } from "./notify.ts";
 
@@ -72,6 +72,7 @@ function targetStatus(
     case "rejection":
       return "Rejected";
     case "offer_received":
+      return isStrongOfferReason(result.reason) ? "Accepted" : "none";
     case "offer_accepted":
     case "offer_confirmed":
       return "Accepted";
@@ -237,6 +238,8 @@ export async function applyClassification(
       drive,
       classification,
       "shortlist looks incomplete — left status unchanged",
+      null,
+      mail.subject,
     );
     const notified = await notifyOnce(deps, mail, text, undefined, now);
     return {
@@ -301,7 +304,13 @@ export async function applyClassification(
   }
 
   // Informational reschedule/cancel / stage notify
-  const text = formatStageChange(drive, classification, classifyResult.reason, calendar);
+  const text = formatStageChange(
+    drive,
+    classification,
+    classifyResult.reason,
+    calendar,
+    mail.subject,
+  );
   const notified = await notifyOnce(deps, mail, text, undefined, now);
 
   return {

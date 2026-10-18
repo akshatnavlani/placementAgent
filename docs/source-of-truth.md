@@ -271,17 +271,33 @@ A daily `checkApplyStatus` pass still runs for drives still in New (catch-up wit
 
 Poll both mailboxes. The PESU account receives public shortlists. Either account can receive a private shortlist. Deduplicate by Gmail message id. A genuine update to an earlier thread can still change state.
 
+**Ownership (poll vs mail)**
+
+| Case | Owner |
+|---|---|
+| New / updated eligible drive | **Poll** only. “Upcoming Placement Opportunity…” UPO blasts are ignored for tracking |
+| Deadlines, reminders, Not Applied | **Poll** |
+| Applied | Telegram Apply / `getAppliedEvents` / verify |
+| Shortlist published | **Mail** — notify; stay Applied unless OA/interview-qualified |
+| Assessment / OA / written test | **Mail** → Assessment (+ calendar when time present) |
+| Interview / GD / VOA / F2F | **Mail** → Interview (+ calendar when time present) |
+| Rejection (“candidature … rejected”) | **Mail** → Rejected |
+| Offer / Final Selects with strong body proof | **Mail** → Accepted |
+| Reschedule / postpone | **Mail** — calendar only; no status change |
+| OTP / Placement App / ops logistics | **Ignore** (never notify / never stage) |
+
 | Mail | Action |
 |---|---|
-| Your name is absent from a shortlist | Infer rejection only when the list is complete and is for the right company, role, round, and population. Otherwise leave the card unchanged and say why. |
-| Your name is present | Set the stage the message actually announces. Notify. |
+| Your name is absent from a shortlist | Infer rejection only when the list is complete and is for the right company, role, round, and population. Otherwise leave the card unchanged and say why. Xlsx-only lists without your name in the body do not auto-reject. |
+| Your name is present | Set the stage the message actually announces. Notify (include subject). |
 | No shortlist mail before a date | Do not infer rejection. |
 | A personal shortlist | Process it even when no group mail exists. |
-| An offer | Distinguish receiving an offer, you accepting it, and a confirmation that it was accepted. |
+| An offer | Accepted only with strong proof (`acknowledge the offer acceptance`, confirmed offer, or Final Selects + company match). Weak “offer” keywords do not advance. |
+| UPO campus blast | Ignore for stage and Telegram. Poll owns discovery. |
 
-Match mail to a stored drive by company and role. If two drives match, or none do, ask. Do not create a drive from mail.
+Match mail to a stored drive by **company name or username clearly present** in subject/body (Applied+). If two drives match, ask. If none, store silently. Do not create a drive from mail. Never write Assessment / Interview / Accepted / Rejected without a single company-anchored match. Bare word `interview` alone is not enough.
 
-**Live notes (M11–M12 / M14):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap query prefers placement language (not bare `offer`). Rule classifier only; marketing/casino noise gated. Telegram notify only for high-confidence actionable classifications with a drive match (or genuine ambiguous ask). `mail.notified_at` prevents double Telegram. If PESU shows `mail_bootstrap_pesu: token refresh failed`, remint `GOOGLE_REFRESH_TOKEN_PESU` against the same OAuth client. Notion later-stage Status is written by the mail path; calendar events on personal `placements` calendar.
+**Live notes (M11–M12 / M14 / PESU corpus rules):** Watcher syncs PESU (+ personal when `GOOGLE_REFRESH_TOKEN_PERSONAL` is set) with Gmail History API; bootstrap prefers `pesuplacements@` / `placementsupport@` + stage keywords (not bare `offer`). Rules from PESU `Mails/` corpus: UPO/OTP ignored; interview requires schedule/HR/GD/VOA-style phrases; shortlist+interview/OA splits before generic shortlist. Telegram notify only for high-confidence actionable mail with a drive match (or genuine ambiguous ask); messages include subject. `mail.notified_at` prevents double Telegram. If PESU shows `mail_bootstrap_pesu: token refresh failed`, remint `GOOGLE_REFRESH_TOKEN_PESU` against the same OAuth client. Notion later-stage Status is written by the mail path; calendar events on personal `placements` calendar.
 
 ### 5.7 Onboarding (first run)
 

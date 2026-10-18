@@ -1,0 +1,6 @@
+{
+  "subject": "Assessment Invitation — HPE Online Assessment",
+  "snippet": "Your online assessment is scheduled",
+  "bodyText": "Dear candidate,\n\nYour online assessment is scheduled. Assessment links have been shared via HackerRank. Please complete the test within 48 hours.\n",
+  "studentNameTokens": ["ada", "lovelace"]
+}

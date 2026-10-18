@@ -572,7 +572,7 @@ M0–M10 green means the product outcome in source of truth §2.2 items 1–5 (i
 - Spam subjects from `nomatch.txt` no longer Telegram.
 - PESU bootstrap succeeds after token remint (ops).
 
-**Live notes (M14):** `app/mail/placementGate.ts` drops noise before apply/notify. Bootstrap query no longer uses bare `offer`. If logs show `mail_bootstrap_pesu: token refresh failed`, remint the PESU refresh token with `gmail.readonly` for the Render OAuth client and update Render env.
+**Live notes (M14 / PESU corpus):** `placementGate` drops UPO blasts, OTP, and marketing. Classifier: no bare `interview`; shortlist→OA/interview split; Accepted only on strong offer reasons. `matchDrive` requires company token (no soft substring latch). Bootstrap prefers PESU placement senders. Notify includes subject. Local `Mails/` corpus is gitignored. If logs show `mail_bootstrap_pesu: token refresh failed`, remint `GOOGLE_REFRESH_TOKEN_PESU` with `gmail.readonly` for the Render OAuth client.
 
 ---
 

@@ -84,4 +84,23 @@ describe("matchDrive", () => {
       expect(r.drive.id).toBe("new-1");
     }
   });
+
+  it("does not latch on stopword-only overlap like India/PES", () => {
+    const r = matchDrive(
+      [drive({ id: "india-co", company_name: "India Soft", company_username: "indiasoft" })],
+      "PES University campus update — India day",
+      "Welcome to PES India campus fest. No company shortlist here.",
+    );
+    expect(r.kind).toBe("none");
+  });
+
+  it("requires company token for Applied match", () => {
+    const r = matchDrive(
+      [drive({ id: "acme-1" })],
+      "Shortlist for the interview — tomorrow",
+      "Please report to the placement office for F2F Interviews.",
+    );
+    expect(r.kind).toBe("none");
+  });
 });
+
