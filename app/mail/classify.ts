@@ -147,7 +147,7 @@ const REJECTION_RE = [
 const INTERVIEW_RE = [
   /\btechnical\s+interview\b/i,
   /\bhr\s+(?:round|interview)\b/i,
-  /\binterview\s+(?:schedule|scheduled|invite|invitation|round|tomorrow|timings?)\b/i,
+  /\binterview\s+(?:schedule|scheduled|invite|invitation|round|tomorrow|timings?|dates?)\b/i,
   /\bscheduled\s+(?:an?\s+)?interview\b/i,
   /\bvirtual\s+interview\b/i,
   /\bf2f\s+interviews?\b/i,
@@ -163,6 +163,7 @@ const ASSESSMENT_RE = [
   /\bassessment\s+invitation\b/i,
   /\bassessment\s+completed\b/i,
   /\bonline\s+assessment\b/i,
+  /\bcognitive\s+assessment\b/i,
   /\b\boa\b/i,
   /\bhackerrank\b/i,
   /\bhackerearth\b/i,
@@ -284,8 +285,8 @@ export function classifyRecruitmentMail(input: ClassifyInput): MailClassificatio
     if (
       /\bshortlist\s+for\s+the\s+online\s+assessment\b/i.test(text) ||
       /\bassessment\s+shortlist\b/i.test(text) ||
-      (hasAny(subject, [/assessment|online\s+test|written\s+test|\boa\b/i]) &&
-        hasAny(subject, [/shortlist/i]))
+      (hasAny(subject, [/assessment|online\s+test|written\s+test|\boa\b|cognitive/i]) &&
+        hasAny(subject, [/shortlist|selected/i]))
     ) {
       return {
         classification: "assessment",
@@ -296,25 +297,28 @@ export function classifyRecruitmentMail(input: ClassifyInput): MailClassificatio
       };
     }
 
+    // Stage language (VOA / online test / cognitive assessment) beats generic shortlist-absent
+    // when the body also says "shortlisted" but the student name is not inline.
+    if (hasAny(text, INTERVIEW_RE)) {
+      return {
+        classification: "interview",
+        confidence: "high",
+        namePresent: present,
+        listComplete,
+        reason: present ? "shortlist_name_interview" : "shortlist_stage_interview",
+      };
+    }
+    if (hasAny(text, ASSESSMENT_RE)) {
+      return {
+        classification: "assessment",
+        confidence: "high",
+        namePresent: present,
+        listComplete,
+        reason: present ? "shortlist_name_assessment" : "shortlist_stage_assessment",
+      };
+    }
+
     if (present) {
-      if (hasAny(text, INTERVIEW_RE)) {
-        return {
-          classification: "interview",
-          confidence: "high",
-          namePresent: true,
-          listComplete,
-          reason: "shortlist_name_interview",
-        };
-      }
-      if (hasAny(text, ASSESSMENT_RE)) {
-        return {
-          classification: "assessment",
-          confidence: "high",
-          namePresent: true,
-          listComplete,
-          reason: "shortlist_name_assessment",
-        };
-      }
       return {
         classification: "shortlist_present",
         confidence: "high",
@@ -326,7 +330,10 @@ export function classifyRecruitmentMail(input: ClassifyInput): MailClassificatio
 
     // Company shortlist from PESU cell without name in body (xlsx attach) — still notify later
     // as shortlist_present leave Applied when company matches; do not high-confidence reject.
-    if (/\bhas\s+shared\s+the\s+shortlist\b/i.test(text) || /\ball\s+the\s+shortlisted\s+students\b/i.test(text)) {
+    if (
+      /\bhas\s+shared\s+the\s+shortlist\b/i.test(text) ||
+      /\ball\s+(?:the\s+)?shortlisted(?:\s+students)?\b/i.test(text)
+    ) {
       return {
         classification: "shortlist_present",
         confidence: "high",

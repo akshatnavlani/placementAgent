@@ -11,6 +11,7 @@ import {
 import {
   getMailByMessageId,
   getMailSyncCursor,
+  listUnnotifiedStageMail,
   setMailSyncCursor,
   upsertMail,
   type MailAccount,
@@ -29,6 +30,7 @@ import { shouldProcessPlacementMail } from "./placementGate.ts";
 const BOOTSTRAP_QUERY =
   "(from:(pesuplacements@pes.edu OR placementsupport@pes.edu) OR shortlist OR shortlisted OR (interview AND (schedule OR scheduled OR invite OR round OR tomorrow OR shortlist)) OR (assessment OR \"online assessment\" OR hackerrank OR hackerearth OR \"written test\") OR (\"offer letter\" OR \"job offer\" OR \"final selects\" OR candidature) OR (regret AND (inform OR shortlisted)) OR rejected OR postponed) newer_than:21d -subject:\"Upcoming Placement Opportunity\" -spins -casino -\"google store\"";
 const BOOTSTRAP_CAP = 50;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type MailSyncLogger = {
   info?: (obj: Record<string, unknown>, msg?: string) => void;
@@ -111,6 +113,8 @@ async function processMessage(
     studentNameTokens: studentTokens,
   });
 
+  // Already notified at this classification — skip. Unnotified rows may retry
+  // (e.g. prior no_drive_match, or classifier upgrade on re-fetch).
   if (
     existing &&
     existing.classification === classified.classification &&
@@ -123,11 +127,6 @@ async function processMessage(
   const upward =
     existing &&
     classificationRank(classified.classification) > classificationRank(existing.classification);
-
-  if (existing && !upward && existing.classification === classified.classification) {
-    summary.skipped += 1;
-    return;
-  }
 
   const match = matchDrive(drives, msg.subject, msg.bodyText);
   let driveId: string | null = existing?.drive_id ?? null;
@@ -268,6 +267,7 @@ async function syncOneMailbox(
     }
   }
 
+  const seen = new Set(messageIds);
   for (const id of messageIds) {
     try {
       await processMessage(deps, account, client, id, studentTokens, drives, summary, now);
@@ -276,6 +276,40 @@ async function syncOneMailbox(
       deps.log?.warn?.({ account, messageId: id, reason: message }, "mail message failed");
       summary.alerts.push(`mail_msg_${account}:${message}`);
     }
+  }
+
+  // History only emits new ids — retry recent unnotified stage mail (classifier/notify fixes).
+  try {
+    const pending = await listUnnotifiedStageMail(deps.db, account, { since: new Date(now.getTime() - 21 * DAY_MS), limit: 40 });
+    for (const row of pending) {
+      if (seen.has(row.gmail_message_id)) {
+        continue;
+      }
+      seen.add(row.gmail_message_id);
+      try {
+        await processMessage(
+          deps,
+          account,
+          client,
+          row.gmail_message_id,
+          studentTokens,
+          drives,
+          summary,
+          now,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "process error";
+        deps.log?.warn?.(
+          { account, messageId: row.gmail_message_id, reason: message },
+          "mail retry failed",
+        );
+        summary.alerts.push(`mail_retry_${account}:${message}`);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "retry list error";
+    deps.log?.warn?.({ account, reason: message }, "mail unnotified retry list failed");
+    summary.alerts.push(`mail_retry_list_${account}:${message}`);
   }
 
   if (nextHistoryId) {

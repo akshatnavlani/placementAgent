@@ -146,6 +146,11 @@ export function formatPollReply(poll: PollSummary): string {
       `Reminders: ${poll.reminded} · Apply checks: ${poll.applyChecked} · Marked applied: ${poll.markedApplied} · Not applied: ${poll.notApplied}`,
     );
   }
+  const mailProcessed = poll.mailProcessed ?? 0;
+  const mailNotified = poll.mailNotified ?? 0;
+  if (mailProcessed > 0 || mailNotified > 0) {
+    lines.push(`Mail: ${mailProcessed} processed · ${mailNotified} notified`);
+  }
   if (poll.alerts.length > 0) {
     lines.push(`Alerts: ${poll.alerts.slice(0, 5).join(", ")}`);
   }

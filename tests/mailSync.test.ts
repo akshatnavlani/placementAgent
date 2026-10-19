@@ -137,6 +137,25 @@ function mailStore() {
         };
       }
       if (table === "mail") {
+        const emptyList = {
+          is() {
+            return emptyList;
+          },
+          neq() {
+            return emptyList;
+          },
+          gte() {
+            return emptyList;
+          },
+          order() {
+            return emptyList;
+          },
+          limit: async () => ({ data: [], error: null }),
+          maybeSingle: async () => ({ data: null, error: null }),
+          eq() {
+            return emptyList;
+          },
+        };
         return {
           select() {
             return {
@@ -158,6 +177,12 @@ function mailStore() {
                     }
                     return { data: null, error: null };
                   },
+                  // listUnnotifiedStageMail chain
+                  is: () => emptyList,
+                  neq: () => emptyList,
+                  gte: () => emptyList,
+                  order: () => emptyList,
+                  limit: async () => ({ data: [], error: null }),
                 };
               },
             };

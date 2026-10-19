@@ -116,4 +116,38 @@ describe("applyClassification notify idempotency", () => {
     expect(second.notified).toBe(false);
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
+
+  it("notifies high-signal reschedule even without a drive match", async () => {
+    const db = {
+      from(table: string) {
+        if (table === "mail") {
+          return {
+            update: () => ({
+              eq: async () => ({ error: null }),
+            }),
+          };
+        }
+        throw new Error(table);
+      },
+    } as never;
+
+    const sendMessage = vi.fn(async () => ({ ok: true as const, messageId: 2 }));
+    const telegram = { sendMessage } as unknown as TelegramClient;
+
+    const result = await applyClassification(
+      { config, db, telegram, chatId: "1" },
+      mailRow({
+        drive_id: null,
+        classification: "reschedule",
+        subject: "Re: Zensar location preference required",
+      }),
+      { classification: "reschedule", confidence: "high", reason: "reschedule_keywords" },
+      {},
+    );
+    expect(result.notified).toBe(true);
+    expect(result.reason).toBe("no_drive_match_notified");
+    const text = String(sendMessage.mock.calls[0]?.[1] ?? "");
+    expect(text).toContain("Reschedule noted");
+    expect(text).toContain("Zensar");
+  });
 });

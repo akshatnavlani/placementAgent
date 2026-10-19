@@ -141,6 +141,27 @@ describe("classifyRecruitmentMail", () => {
     expect(r.namePresent).toBe(false);
   });
 
+  it("maps Pine Labs online-test shortlist mail to assessment", () => {
+    const r = classifyRecruitmentMail(load("pine_labs_online_test.json"));
+    expect(r.classification).toBe("assessment");
+    expect(r.confidence).toBe("high");
+    expect(isActionableMailClassification(r)).toBe(true);
+  });
+
+  it("maps Deloitte VOA shortlist language to interview", () => {
+    const r = classifyRecruitmentMail(load("deloitte_voa_shortlist.json"));
+    expect(r.classification).toBe("interview");
+    expect(r.confidence).toBe("high");
+    expect(isActionableMailClassification(r)).toBe(true);
+  });
+
+  it("maps ITC cognitive assessment selected mail to assessment", () => {
+    const r = classifyRecruitmentMail(load("itc_cognitive_assessment.json"));
+    expect(r.classification).toBe("assessment");
+    expect(r.confidence).toBe("high");
+    expect(isActionableMailClassification(r)).toBe(true);
+  });
+
   it("does not classify bare interview alone outside schedule phrases", () => {
     const r = classifyRecruitmentMail({
       subject: "Company update",

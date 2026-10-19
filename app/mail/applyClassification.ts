@@ -207,8 +207,35 @@ export async function applyClassification(
     };
   }
 
-  // No drive match: store silently (do not ask / notify).
+  // No drive match: still Telegram high-signal stage mail (Zensar postponed, etc.).
   if (!mail.drive_id && !options.drive) {
+    const notifyUnmatched =
+      classification === "reschedule" ||
+      classification === "cancel" ||
+      classification === "interview" ||
+      classification === "assessment" ||
+      classification === "rejection" ||
+      classification === "offer_received" ||
+      classification === "offer_accepted" ||
+      classification === "offer_confirmed" ||
+      classification === "shortlist_present";
+    if (notifyUnmatched) {
+      const text = formatStageChange(
+        null,
+        classification,
+        classifyResult.reason,
+        null,
+        mail.subject,
+      );
+      const notified = await notifyOnce(deps, mail, text, undefined, now);
+      return {
+        statusWritten: null,
+        notified,
+        asked: false,
+        skipped: !notified,
+        reason: notified ? "no_drive_match_notified" : "no_drive_match",
+      };
+    }
     return {
       statusWritten: null,
       notified: false,

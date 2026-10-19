@@ -189,6 +189,32 @@ export async function bindMailDrive(
   }
 }
 
+/**
+ * Recent unnotified stage-shaped rows (excludes unresolved spam).
+ * Used to retry after classifier/notify fixes — History API will not re-emit them.
+ */
+export async function listUnnotifiedStageMail(
+  db: DbClient,
+  account: MailAccount,
+  options: { since?: Date; limit?: number } = {},
+): Promise<MailRow[]> {
+  const limit = options.limit ?? 40;
+  const since = options.since ?? new Date(Date.now() - 21 * 24 * 60 * 60 * 1000);
+  const { data, error } = await db
+    .from("mail")
+    .select("*")
+    .eq("account", account)
+    .is("notified_at", null)
+    .neq("classification", "unresolved")
+    .gte("created_at", since.toISOString())
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    throw new Error(`mail listUnnotifiedStage failed: ${error.message}`);
+  }
+  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}
+
 export async function getMailSyncCursor(
   db: DbClient,
   account: MailAccount,

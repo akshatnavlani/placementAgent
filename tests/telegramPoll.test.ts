@@ -79,6 +79,11 @@ describe("formatPollReply", () => {
     expect(text).toContain("Notified: 1 · Details: 1 · PDFs: 2");
   });
 
+  it("includes mail line when mail was processed", () => {
+    const text = formatPollReply(emptyOk({ mailProcessed: 3, mailNotified: 2 }));
+    expect(text).toContain("Mail: 3 processed · 2 notified");
+  });
+
   it("reports failure alert", () => {
     expect(formatPollReply(emptyOk({ ok: false, alert: "rateLimited" }))).toBe(
       "Poll failed: rateLimited",
