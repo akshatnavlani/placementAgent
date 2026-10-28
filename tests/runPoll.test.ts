@@ -185,6 +185,7 @@ describe("runPoll", () => {
         alerted_at: "2026-01-01T00:00:00.000Z",
         applied_at: null,
         last_apply_check_at: null,
+    last_rejection_ask_at: null,
       },
     ];
     const { db, rows, ops } = memoryStore(seed);
@@ -199,6 +200,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
     });
@@ -234,6 +236,7 @@ describe("runPoll", () => {
         alerted_at: "2026-01-01T00:00:00.000Z",
         applied_at: null,
         last_apply_check_at: null,
+    last_rejection_ask_at: null,
       },
     ]);
     const placement = new PlacementClient({
@@ -252,6 +255,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       listExisting: async () => [...rows.values()],
     });
     expect(result.ok).toBe(false);
@@ -296,7 +300,7 @@ describe("runPoll", () => {
       return new Response("no", { status: 404 });
     });
 
-    // Stub extract by pre-seeding pdf_text after first poll via inject — instead mock extract path:
+    // Stub extract by pre-seeding pdf_text after first poll via inject ? instead mock extract path:
     // First poll will fail extract on tiny bytes; to avoid depending on pdf-parse for this test,
     // seed an existing row with pdf_text already filled and same updatedAt so second path is touch-only.
     const seeded: DriveRow = {
@@ -322,6 +326,7 @@ describe("runPoll", () => {
       alerted_at: "2026-01-01T00:00:00.000Z",
       applied_at: null,
       last_apply_check_at: null,
+    last_rejection_ask_at: null,
     };
 
     const { db, rows } = memoryStore([seeded]);
@@ -334,6 +339,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -349,6 +355,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:05:00.000Z"),
@@ -392,6 +399,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -453,6 +461,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:00:00.000Z"),
@@ -473,6 +482,7 @@ describe("runPoll", () => {
       notify: false,
       reminders: false,
       dailyApply: false,
+      reconcileApplied: false,
       fetch: fetchMock as unknown as typeof fetch,
       listExisting: async () => [...rows.values()],
       now: new Date("2026-01-02T00:05:00.000Z"),

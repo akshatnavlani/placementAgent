@@ -180,6 +180,37 @@ export async function failDraft(
   return data ? mapRow(data as Record<string, unknown>) : null;
 }
 
+/**
+ * Fail a ready, undelivered draft (e.g. multi-page PDF after compile).
+ */
+export async function failReadyDraft(
+  db: DbClient,
+  driveId: string,
+  errorMessage: string,
+  now: Date = new Date(),
+): Promise<DraftRow | null> {
+  const latest = await getLatestDraft(db, driveId);
+  if (!latest || latest.status !== "ready" || latest.delivered_at) {
+    return null;
+  }
+  const iso = now.toISOString();
+  const { data, error } = await db
+    .from("draft")
+    .update({
+      status: "failed",
+      error: errorMessage.slice(0, 2000),
+      updated_at: iso,
+    })
+    .eq("id", latest.id)
+    .eq("status", "ready")
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    throw new Error(`draft failReady failed: ${error.message}`);
+  }
+  return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
 export async function markDraftDelivered(
   db: DbClient,
   driveId: string,

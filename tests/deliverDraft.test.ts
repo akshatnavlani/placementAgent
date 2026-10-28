@@ -45,6 +45,7 @@ function store(opts: {
     alerted_at: null,
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
   };
   const draft = {
     id: "dr1",
@@ -67,6 +68,12 @@ function store(opts: {
             eq: () => ({
               maybeSingle: async () => ({ data: drive, error: null }),
             }),
+          }),
+          update: (payload: Record<string, unknown>) => ({
+            eq: async () => {
+              Object.assign(drive, payload);
+              return { error: null };
+            },
           }),
         };
       }
@@ -189,10 +196,50 @@ describe("deliverReadyDraft", () => {
             return { code: 0, stderr: "" };
           },
         },
+        countPages: async () => ({ ok: true, pages: 1 }),
       },
       "d1",
     );
     expect(result).toEqual({ kind: "delivered", driveId: "d1", pdf: true });
     expect(docs.some((n) => n.endsWith(".pdf"))).toBe(true);
+  });
+
+  it("fails draft when PDF is more than one page", async () => {
+    const { db, draft } = store({ status: "ready" });
+    const messages: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("sendMessage")) {
+        const body = JSON.parse(String(init?.body)) as { text: string };
+        messages.push(body.text);
+      }
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
+    });
+    const { writeFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const result = await deliverReadyDraft(
+      {
+        config: baseConfig,
+        db,
+        telegram: new TelegramClient({
+          botToken: "bot",
+          fetch: fetchMock as unknown as typeof fetch,
+        }),
+        compile: {
+          ensureTectonic: async () => undefined,
+          runCommand: async (_bin, _args, cwd) => {
+            await writeFile(join(cwd, "resume.pdf"), Buffer.from("%PDF-ok"));
+            return { code: 0, stderr: "" };
+          },
+        },
+        countPages: async () => ({ ok: true, pages: 2 }),
+      },
+      "d1",
+    );
+
+    expect(result).toEqual({ kind: "too_many_pages", driveId: "d1", pages: 2 });
+    expect(draft.status).toBe("failed");
+    expect(draft.delivered_at).toBeNull();
+    expect(messages.some((m) => m.includes("2 pages"))).toBe(true);
   });
 });

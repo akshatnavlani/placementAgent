@@ -34,6 +34,8 @@ export type DriveRow = {
   alerted_at: string | null;
   applied_at: string | null;
   last_apply_check_at: string | null;
+  /** When we last asked Telegram if a missing applied drive was rejected. */
+  last_rejection_ask_at: string | null;
 };
 
 export type DriveUpsertFields = {
@@ -97,6 +99,7 @@ function mapRow(row: Record<string, unknown>): DriveRow {
     alerted_at: (row.alerted_at as string | null) ?? null,
     applied_at: (row.applied_at as string | null) ?? null,
     last_apply_check_at: (row.last_apply_check_at as string | null) ?? null,
+    last_rejection_ask_at: (row.last_rejection_ask_at as string | null) ?? null,
   };
 }
 
@@ -409,6 +412,31 @@ export async function markApplyChecked(db: DbClient, id: string, now: Date = new
   if (error) {
     throw new Error(`drive markApplyChecked failed: ${error.message}`);
   }
+}
+
+export async function markRejectionAsked(
+  db: DbClient,
+  id: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const { error } = await db
+    .from("drive")
+    .update({
+      last_rejection_ask_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    })
+    .eq("id", id);
+  if (error) {
+    throw new Error(`drive markRejectionAsked failed: ${error.message}`);
+  }
+}
+
+/** Applied / Assessment / Interview cards — candidates for applied-list reconciliation. */
+export async function listActiveAppliedDrives(db: DbClient): Promise<DriveRow[]> {
+  const all = await listDrives(db);
+  return all.filter(
+    (row) => row.status === "Applied" || row.status === "Assessment" || row.status === "Interview",
+  );
 }
 
 export type DriveDraftStatus = "pending" | "ready" | "failed";

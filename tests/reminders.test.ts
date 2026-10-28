@@ -27,6 +27,7 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
     alerted_at: "2026-01-01T00:00:00.000Z",
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
     ...partial,
   };
 }

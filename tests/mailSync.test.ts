@@ -39,6 +39,7 @@ function driveRow(): DriveRow {
     alerted_at: null,
     applied_at: "2026-01-02T00:00:00.000Z",
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
   };
 }
 
@@ -321,7 +322,7 @@ describe("syncRecruitmentMail", () => {
     expect(drives.get(driveRow().id)?.status).toBe("Applied"); // shortlist_present leaves Applied
     expect(mail.size).toBe(1);
 
-    // Second pass with cursor → history empty → skip
+    // Second pass with cursor ? history empty ? skip
     const gmailFetch2 = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.includes("oauth2.googleapis.com/token")) {

@@ -34,6 +34,7 @@ function rowFromEvent(event: Record<string, unknown>, overrides: Partial<DriveRo
     alerted_at: null,
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
     ...overrides,
   };
 }

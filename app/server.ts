@@ -1,18 +1,14 @@
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Config } from "./config.ts";
-import { hasTelegram, requireSupabase, requireTelegram } from "./config.ts";
+import { requireSupabase } from "./config.ts";
 import { createDbClient } from "./db/client.ts";
 import { getLatestPendingPayload } from "./db/draft.ts";
-import { getPollReportsEnabled, setLastCronAt } from "./db/secret.ts";
 import { assertDraftCallbackConfigured, draftCallbackBodySchema, handleDraftCallback } from "./draft/callback.ts";
 import { hasBearerSecret } from "./http/bearer.ts";
 import { loggerOptions } from "./log.ts";
 import { syncRecruitmentMail } from "./mail/sync.ts";
-import { runPoll } from "./poll/runPoll.ts";
-import { formatPollReply } from "./telegram/handlers.ts";
-import { TelegramClient } from "./telegram/client.ts";
-import { notifyPollOps } from "./telegram/ops.ts";
+import { executeCronPoll } from "./poll/executeCronPoll.ts";
 import { registerTelegramWebhook } from "./telegram/webhook.ts";
 
 export function buildServer(config: Config): FastifyInstance {
@@ -33,7 +29,7 @@ export function buildServer(config: Config): FastifyInstance {
       },
     },
     async (request, reply) => {
-      const poll = await runPoll({
+      const result = await executeCronPoll({
         config,
         log: {
           info: (obj, msg) => request.log.info(obj, msg),
@@ -41,57 +37,10 @@ export function buildServer(config: Config): FastifyInstance {
           error: (obj, msg) => request.log.error(obj, msg),
         },
       });
-
-      if (hasTelegram(config)) {
-        try {
-          const tg = requireTelegram(config);
-          const telegram = new TelegramClient({
-            botToken: tg.botToken,
-            fetch: globalThis.fetch.bind(globalThis),
-            log: {
-              info: (obj, msg) => request.log.info(obj, msg),
-              warn: (obj, msg) => request.log.warn(obj, msg),
-            },
-          });
-          await notifyPollOps(
-            {
-              telegram,
-              chatId: tg.chatId,
-              log: {
-                info: (obj, msg) => request.log.info(obj, msg),
-                warn: (obj, msg) => request.log.warn(obj, msg),
-              },
-            },
-            poll,
-          );
-
-          let reportsOn = true;
-          try {
-            const supabase = requireSupabase(config);
-            const db = createDbClient(supabase.url, supabase.serviceRoleKey);
-            try {
-              await setLastCronAt(db);
-            } catch (stampErr) {
-              const reason = stampErr instanceof Error ? stampErr.message : "stamp failed";
-              request.log.warn({ reason }, "last_cron_at stamp skipped");
-            }
-            reportsOn = await getPollReportsEnabled(db);
-          } catch {
-            reportsOn = true;
-          }
-          if (reportsOn) {
-            const sent = await telegram.sendMessage(tg.chatId, formatPollReply(poll));
-            if (!sent.ok) {
-              request.log.warn({ reason: sent.reason }, "poll report skipped");
-            }
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "ops alert error";
-          request.log.warn({ reason: message }, "ops notify skipped");
-        }
+      if (result.kind === "skipped") {
+        return reply.code(202).send({ accepted: true, skipped: true, reason: result.reason });
       }
-
-      return reply.code(202).send({ accepted: true, poll });
+      return reply.code(202).send({ accepted: true, poll: result.poll });
     },
   );
 
@@ -201,10 +150,8 @@ export function buildServer(config: Config): FastifyInstance {
         log: {
           info: (obj, msg) => request.log.info(obj, msg),
           warn: (obj, msg) => request.log.warn(obj, msg),
-          error: (obj, msg) => request.log.error(obj, msg),
         },
       });
-
       return reply.code(202).send({ accepted: true, mail });
     },
   );

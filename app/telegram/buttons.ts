@@ -8,7 +8,8 @@ export type CallbackDecoded =
   | { kind: "profile"; action: ProfileCallbackAction }
   | { kind: "github"; action: "ok" | "no"; index: number }
   | { kind: "ask"; optionIndex: number }
-  | { kind: "mail"; mailId: string; driveId: string };
+  | { kind: "mail"; mailId: string; driveId: string }
+  | { kind: "reject_confirm"; driveId: string; rejected: boolean };
 
 export function encodeCallback(kind: DriveCallbackKind, driveId: string): string {
   const prefix = kind === "prepare" ? "p" : kind === "applied" ? "a" : "s";
@@ -41,6 +42,17 @@ export function decodeCallback(data: string): CallbackDecoded | null {
     const driveId = mail[2] ?? "";
     if (mailId && driveId) {
       return { kind: "mail", mailId, driveId };
+    }
+  }
+  const rejectConfirm = /^rj:([yn]):(.+)$/.exec(data);
+  if (rejectConfirm) {
+    const driveId = rejectConfirm[2] ?? "";
+    if (driveId) {
+      return {
+        kind: "reject_confirm",
+        driveId,
+        rejected: rejectConfirm[1] === "y",
+      };
     }
   }
   const match = /^(p|a|s):(.+)$/.exec(data);
@@ -144,5 +156,25 @@ export function chooseMailDriveKeyboard(
         callback_data: encodeMailCallback(mailId, drive.id),
       },
     ]),
+  };
+}
+
+export function encodeRejectConfirm(driveId: string, rejected: boolean): string {
+  const data = `rj:${rejected ? "y" : "n"}:${driveId}`;
+  if (data.length > 64) {
+    throw new Error("callback_data exceeds Telegram 64-byte limit");
+  }
+  return data;
+}
+
+/** Ask whether a missing applied drive (or incomplete shortlist) means Rejected. */
+export function confirmRejectKeyboard(driveId: string): Record<string, unknown> {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Rejected", callback_data: encodeRejectConfirm(driveId, true) },
+        { text: "Still applied", callback_data: encodeRejectConfirm(driveId, false) },
+      ],
+    ],
   };
 }

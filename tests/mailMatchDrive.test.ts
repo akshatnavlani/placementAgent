@@ -26,6 +26,7 @@ function drive(overrides: Partial<DriveRow>): DriveRow {
     alerted_at: null,
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
     ...overrides,
   };
 }
@@ -43,7 +44,7 @@ describe("matchDrive", () => {
   it("returns one clear Applied winner", () => {
     const r = matchDrive(
       [drive({ id: "acme-1" }), drive({ id: "other", company_name: "OtherCo", event_name: "Analyst" })],
-      "Shortlist â€” Acme Corp SDE Intern",
+      "Shortlist — Acme Corp SDE Intern",
       "Candidates shortlisted for Acme Corp SDE Intern role",
     );
     expect(r.kind).toBe("one");
@@ -88,7 +89,7 @@ describe("matchDrive", () => {
   it("does not latch on stopword-only overlap like India/PES", () => {
     const r = matchDrive(
       [drive({ id: "india-co", company_name: "India Soft", company_username: "indiasoft" })],
-      "PES University campus update â€” India day",
+      "PES University campus update — India day",
       "Welcome to PES India campus fest. No company shortlist here.",
     );
     expect(r.kind).toBe("none");
@@ -97,7 +98,7 @@ describe("matchDrive", () => {
   it("requires company token for Applied match", () => {
     const r = matchDrive(
       [drive({ id: "acme-1" })],
-      "Shortlist for the interview â€” tomorrow",
+      "Shortlist for the interview — tomorrow",
       "Please report to the placement office for F2F Interviews.",
     );
     expect(r.kind).toBe("none");

@@ -1,8 +1,9 @@
 import type { Config } from "../config.ts";
 import { hasTelegram, requireTelegram } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
-import { getLatestDraft, markDraftDelivered } from "../db/draft.ts";
-import { getDrive } from "../db/drive.ts";
+import { failReadyDraft, getLatestDraft, markDraftDelivered } from "../db/draft.ts";
+import { getDrive, setDraftStatus } from "../db/drive.ts";
+import { countPdfPages } from "../pdf/pageCount.ts";
 import { draftReadyKeyboard } from "../telegram/buttons.ts";
 import { TelegramClient } from "../telegram/client.ts";
 import { compileLatexToPdf, type CompileDeps } from "./compile.ts";
@@ -15,6 +16,7 @@ export type DeliverResult =
   | { kind: "missing_draft" }
   | { kind: "not_ready" }
   | { kind: "no_telegram" }
+  | { kind: "too_many_pages"; driveId: string; pages: number }
   | { kind: "partial"; reason: string };
 
 export type DeliverDeps = {
@@ -28,6 +30,8 @@ export type DeliverDeps = {
     warn?: (obj: Record<string, unknown>, msg?: string) => void;
   };
   now?: Date;
+  /** Test seam: override page counting. */
+  countPages?: typeof countPdfPages;
 };
 
 export async function deliverReadyDraft(
@@ -62,11 +66,8 @@ export async function deliverReadyDraft(
   const fields = extractCustomFields(drive.raw_detail ?? drive.raw_list);
   const ats = parseAtsComments(draft.latex);
   const keyboard = draftReadyKeyboard(driveId);
-
-  const statusLines = [`Draft ready for ${company}.`];
-  if (ats.match) {
-    statusLines.push(`ATS match: ${ats.match}${ats.note ? ` — ${ats.note}` : ""}`);
-  }
+  const now = deps.now ?? new Date();
+  const countPages = deps.countPages ?? countPdfPages;
 
   const sendText = async (text: string, replyMarkup?: Record<string, unknown>) => {
     const r = await telegram.sendMessage(chatId, text.slice(0, 4000), replyMarkup);
@@ -76,15 +77,38 @@ export async function deliverReadyDraft(
   };
 
   try {
+    const compiled = await compileLatexToPdf(draft.latex, driveId, {
+      ...deps.compile,
+      fetch: deps.fetch ?? deps.compile?.fetch,
+    });
+
+    if (compiled.ok) {
+      const pages = await countPages(compiled.pdf);
+      if (pages.ok && pages.pages !== 1) {
+        const reason = `resume is ${pages.pages} pages (need 1)`;
+        await failReadyDraft(deps.db, driveId, reason, now);
+        await setDraftStatus(deps.db, driveId, "failed", now);
+        await sendText(
+          `Draft for ${company} rejected: resume is ${pages.pages} pages (need exactly 1). Tap Prepare to re-trim.`,
+        );
+        deps.log?.warn?.({ driveId, pages: pages.pages }, "draft multi-page rejected");
+        return { kind: "too_many_pages", driveId, pages: pages.pages };
+      }
+      if (!pages.ok) {
+        deps.log?.warn?.({ driveId, reason: pages.reason }, "pdf page count failed; delivering anyway");
+      }
+    }
+
+    const statusLines = [`Draft ready for ${company}.`];
+    if (ats.match) {
+      statusLines.push(`ATS match: ${ats.match}${ats.note ? ` — ${ats.note}` : ""}`);
+    }
+
     await sendText(statusLines.join("\n"), keyboard);
     await sendText(formatAnswersList(draft.answers, fields));
 
     const base = sanitizeFilename(company);
     let pdfOk = false;
-    const compiled = await compileLatexToPdf(draft.latex, driveId, {
-      ...deps.compile,
-      fetch: deps.fetch ?? deps.compile?.fetch,
-    });
     if (compiled.ok) {
       const pdfSend = await telegram.sendDocument(chatId, {
         filename: `${base}-resume.pdf`,
@@ -100,7 +124,7 @@ export async function deliverReadyDraft(
       await sendText(`PDF skipped: ${compiled.reason}.`);
     }
 
-    await markDraftDelivered(deps.db, driveId, deps.now ?? new Date());
+    await markDraftDelivered(deps.db, driveId, now);
     deps.log?.info?.({ driveId, pdf: pdfOk, answerCount: draft.answers.length }, "draft delivered");
     return { kind: "delivered", driveId, pdf: pdfOk };
   } catch (error) {

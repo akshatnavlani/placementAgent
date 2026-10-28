@@ -46,6 +46,7 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
     alerted_at: "2026-01-01T00:00:00.000Z",
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
     ...partial,
   };
 }
@@ -107,7 +108,7 @@ function applyStore(seed: DriveRow[]) {
                         const prev = seed.find((r) => r.id === id);
                         const current = rows.get(id);
                         if (current && prev && prev.status !== val) {
-                          // revert if was not New before this update batch â€” keep simple: re-check
+                          // revert if was not New before this update batch — keep simple: re-check
                         }
                         if (current && current.status === "Not Applied" && val === "New") {
                           // already applied payload; ensure only New moved

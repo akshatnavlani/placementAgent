@@ -33,6 +33,7 @@ import { TelegramClient } from "../telegram/client.ts";
 import { shouldAlert } from "../telegram/dedup.ts";
 import { notifyEligibleDrive } from "../telegram/notify.ts";
 import { syncRecruitmentMail } from "../mail/sync.ts";
+import { reconcileAppliedEvents } from "../apply/reconcileApplied.ts";
 import { runDailyApplyPass } from "./dailyApply.ts";
 import { diffCatalog, eventDisplayFields, extractPdfUrls, type DiffAction } from "./diff.ts";
 import { sendDeadlineReminders } from "./reminders.ts";
@@ -54,6 +55,7 @@ export type PollSummary = {
   reminded: number;
   applyChecked: number;
   markedApplied: number;
+  rejectAsked?: number;
   mailProcessed?: number;
   mailNotified?: number;
 };
@@ -83,6 +85,8 @@ export type RunPollDeps = {
   reminders?: boolean;
   /** When false, skip daily checkApplyStatus pass. */
   dailyApply?: boolean;
+  /** When false, skip getAppliedEvents reconciliation asks. */
+  reconcileApplied?: boolean;
   /** When false, skip Gmail recruitment mail pass. */
   mailSync?: boolean;
   /** Internal: true after one renewal retry of the full poll. */
@@ -103,6 +107,7 @@ function emptySummary(partial: Partial<PollSummary> & { ok: boolean }): PollSumm
     reminded: 0,
     applyChecked: 0,
     markedApplied: 0,
+    rejectAsked: 0,
     ...partial,
   };
 }
@@ -275,6 +280,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   let reminded = 0;
   let applyChecked = 0;
   let markedApplied = 0;
+  let rejectAsked = 0;
 
   const touchIds: string[] = [];
   const notAppliedIds: string[] = [];
@@ -476,6 +482,21 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     alerts.push(...daily.alerts);
   }
 
+  if (deps.reconcileApplied !== false) {
+    const reconciled = await reconcileAppliedEvents({
+      config: deps.config,
+      db,
+      placement,
+      telegram: telegramClient,
+      chatId: hasTelegram(deps.config) ? requireTelegram(deps.config).chatId : undefined,
+      fetch: fetchImpl,
+      log,
+      now,
+    });
+    rejectAsked = reconciled.asked;
+    alerts.push(...reconciled.alerts);
+  }
+
   const wantNotion = deps.notionSync !== false;
   if (wantNotion) {
     if (!hasNotion(deps.config)) {
@@ -552,6 +573,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       reminded,
       applyChecked,
       markedApplied,
+      rejectAsked,
       mailProcessed,
       mailNotified,
       alertCount: alerts.length,
@@ -573,6 +595,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     reminded,
     applyChecked,
     markedApplied,
+    rejectAsked,
     mailProcessed,
     mailNotified,
   };

@@ -7,6 +7,7 @@ import { hasNotion, requireNotion } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
 import {
   getDrive,
+  markRejectionAsked,
   setMailStage,
   type DriveRow,
   type MailStageStatus,
@@ -20,7 +21,7 @@ import {
 import { NotionClient } from "../notion/client.ts";
 import { syncDrive } from "../notion/sync.ts";
 import type { TelegramClient } from "../telegram/client.ts";
-import { chooseMailDriveKeyboard } from "../telegram/buttons.ts";
+import { chooseMailDriveKeyboard, confirmRejectKeyboard } from "../telegram/buttons.ts";
 import { isStrongOfferReason, type MailClassificationResult } from "./classify.ts";
 import { isActionableMailClassification } from "./placementGate.ts";
 import { driveChoiceLabel, formatAmbiguousMail, formatStageChange } from "./notify.ts";
@@ -256,25 +257,46 @@ export async function applyClassification(
     };
   }
 
-  // Incomplete shortlist absent: notify explain, no status write
+  // Incomplete shortlist absent: ask user whether to mark Rejected (no auto status write).
   if (
     classification === "shortlist_absent" &&
     classifyResult.listComplete !== true
   ) {
-    const text = formatStageChange(
-      drive,
-      classification,
-      "shortlist looks incomplete — left status unchanged",
-      null,
-      mail.subject,
+    if (!drive) {
+      const text = formatStageChange(
+        null,
+        classification,
+        "shortlist looks incomplete — left status unchanged",
+        null,
+        mail.subject,
+      );
+      const notified = await notifyOnce(deps, mail, text, undefined, now);
+      return {
+        statusWritten: null,
+        notified,
+        asked: false,
+        skipped: !notified,
+        reason: "shortlist_incomplete",
+      };
+    }
+    const label = driveChoiceLabel(drive.company_name, drive.event_name);
+    const text = `Shortlist for ${label} looks incomplete and you are not listed. Mark Rejected?`;
+    const notified = await notifyOnce(
+      deps,
+      mail,
+      text,
+      confirmRejectKeyboard(drive.id),
+      now,
     );
-    const notified = await notifyOnce(deps, mail, text, undefined, now);
+    if (notified) {
+      await markRejectionAsked(deps.db, drive.id, now);
+    }
     return {
       statusWritten: null,
       notified,
-      asked: false,
+      asked: notified,
       skipped: false,
-      reason: "shortlist_incomplete",
+      reason: "shortlist_incomplete_ask",
     };
   }
 

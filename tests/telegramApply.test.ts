@@ -44,6 +44,7 @@ function driveRow(partial: Partial<DriveRow> & { id: string }): DriveRow {
     alerted_at: "2026-01-01T00:00:00.000Z",
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
     ...partial,
   };
 }
@@ -107,6 +108,14 @@ function applyStore(seed: DriveRow[]) {
                 error: null,
               }),
             }),
+          }),
+        };
+      }
+      if (table === "answer") {
+        return {
+          select: () => ({
+            then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
+              Promise.resolve(resolve({ data: [], error: null })),
           }),
         };
       }

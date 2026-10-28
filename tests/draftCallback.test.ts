@@ -123,6 +123,7 @@ describe("handleDraftCallback", () => {
       alerted_at: null,
       applied_at: null,
       last_apply_check_at: null,
+    last_rejection_ask_at: null,
     });
 
     const fetchMock = vi.fn(async () =>
@@ -181,6 +182,7 @@ describe("handleDraftCallback", () => {
       alerted_at: null,
       applied_at: null,
       last_apply_check_at: null,
+    last_rejection_ask_at: null,
     });
 
     const result = await handleDraftCallback({

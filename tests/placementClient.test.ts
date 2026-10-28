@@ -63,7 +63,11 @@ describe("PlacementClient outcomes", () => {
     const client = new PlacementClient({
       fetch: vi.fn(async () => jsonResponse(404, { message: "missing" })) as unknown as typeof fetch,
     });
-    expect(await client.validateStudent("x", "y")).toEqual({ kind: "http", status: 404 });
+    expect(await client.validateStudent("x", "y")).toEqual({
+      kind: "http",
+      status: 404,
+      message: "missing",
+    });
   });
 
   it("maps 429 with Retry-After", async () => {

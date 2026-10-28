@@ -27,6 +27,7 @@ function row(partial: Partial<DriveRow> & { id: string }): DriveRow {
     alerted_at: null,
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
     ...partial,
   };
 }
@@ -86,6 +87,7 @@ describe("shouldAlert", () => {
       alerted_at: "2026-01-01T00:00:00.000Z",
       applied_at: null,
       last_apply_check_at: null,
+    last_rejection_ask_at: null,
       deadline: "2099-01-01T00:00:00.000Z",
     });
     const next = row({
@@ -93,6 +95,7 @@ describe("shouldAlert", () => {
       alerted_at: "2026-01-01T00:00:00.000Z",
       applied_at: null,
       last_apply_check_at: null,
+    last_rejection_ask_at: null,
       deadline: "2099-06-01T00:00:00.000Z",
     });
     expect(

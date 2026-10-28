@@ -1,4 +1,8 @@
 import { importAppliedEvents, importAppliedReplyText } from "../apply/importApplied.ts";
+import {
+  confirmDriveRejected,
+  confirmDriveStillApplied,
+} from "../apply/reconcileApplied.ts";
 import { skipDrive, skipReplyText } from "../apply/skip.ts";
 import { submitApplication, submitReplyText } from "../apply/submit.ts";
 import { beginOtpAfterApprove, completeOtp, type OtpDeps } from "../auth/otp.ts";
@@ -96,8 +100,8 @@ export function formatHelpReply(): string {
     "Commands:",
     "/help — this list",
     "/poll — pull eligible drives + mail now",
-    "/pollreports — cron summary status (Actions wake ~every 5 min)",
-    "/pollreports on|off — enable or pause cron summaries",
+    "/pollreports — poll summary status (in-process every 5 min)",
+    "/pollreports on|off — enable or pause scheduled summaries",
     "/profile — onboarding / resume menu",
     "/profile redo — restart profile wizard",
     "/profile latex — replace canonical LaTeX only",
@@ -143,7 +147,7 @@ export function formatPollReply(poll: PollSummary): string {
   ];
   if (poll.reminded || poll.applyChecked || poll.markedApplied || poll.notApplied) {
     lines.push(
-      `Reminders: ${poll.reminded} · Apply checks: ${poll.applyChecked} · Marked applied: ${poll.markedApplied} · Not applied: ${poll.notApplied}`,
+      `Reminders: ${poll.reminded} · Apply checks: ${poll.applyChecked} · Marked applied: ${poll.markedApplied} · Reject asks: ${poll.rejectAsked ?? 0} · Not applied: ${poll.notApplied}`,
     );
   }
   const mailProcessed = poll.mailProcessed ?? 0;
@@ -428,6 +432,44 @@ export async function handleTelegramUpdate(
       );
       return { handled: true, reason: result.asked ? "mail_ask" : `mail_${result.reason}` };
     }
+    if (decoded.kind === "reject_confirm") {
+      await deps.telegram.answerCallbackQuery(
+        callback.id,
+        decoded.rejected ? "Marking rejected…" : "Keeping applied…",
+      );
+      if (!deps.config || !deps.db) {
+        await deps.telegram.sendMessage(deps.allowedChatId, "Rejection confirm is not configured yet.");
+        return { handled: true, reason: "reject_confirm_unconfigured" };
+      }
+      if (decoded.rejected) {
+        const result = await confirmDriveRejected(
+          {
+            config: deps.config,
+            db: deps.db,
+            telegram: deps.telegram,
+            chatId: deps.allowedChatId,
+            fetch: deps.fetch,
+            log: deps.log,
+          },
+          decoded.driveId,
+        );
+        await deps.telegram.sendMessage(
+          deps.allowedChatId,
+          result.ok
+            ? `Marked Rejected: ${result.company}.`
+            : `Could not mark Rejected (${result.reason}).`,
+        );
+        return { handled: true, reason: result.ok ? "reject_confirmed" : "reject_confirm_failed" };
+      }
+      const kept = await confirmDriveStillApplied({ db: deps.db }, decoded.driveId);
+      await deps.telegram.sendMessage(
+        deps.allowedChatId,
+        kept.ok
+          ? `Keeping ${kept.company} as applied (won't ask again today).`
+          : `Could not update (${kept.reason}).`,
+      );
+      return { handled: true, reason: kept.ok ? "reject_denied" : "reject_deny_failed" };
+    }
     if (decoded.kind === "prepare") {
       await deps.telegram.answerCallbackQuery(callback.id, "Preparing…");
       const prepared = await runPrepare(deps, decoded.driveId);
@@ -583,15 +625,15 @@ export async function handleTelegramUpdate(
       }
       const lastCron = await getLastCronAt(deps.db).catch(() => null);
       const lastCronLine = lastCron
-        ? `Last Actions wake: ${lastCron}`
-        : "Last Actions wake: never (schedule must live on GitHub default branch main).";
+        ? `Last scheduled poll: ${lastCron}`
+        : "Last scheduled poll: never (in-process 5-min scheduler + optional /cron/poll).";
       if (pollReportsCmd.kind === "set") {
         await setPollReportsEnabled(deps.db, pollReportsCmd.enabled);
         await deps.telegram.sendMessage(
           deps.allowedChatId,
           pollReportsCmd.enabled
-            ? `Poll reports on — summaries arrive after each GitHub Actions /cron/poll (~5 min), not from manual /poll.\n${lastCronLine}`
-            : "Poll reports off — cron summaries paused. Manual /poll still replies.",
+            ? `Poll reports on — summaries arrive after each scheduled poll (~5 min), not from manual /poll.\n${lastCronLine}`
+            : "Poll reports off — scheduled summaries paused. Manual /poll still replies.",
         );
         return { handled: true, reason: pollReportsCmd.enabled ? "pollreports_on" : "pollreports_off" };
       }

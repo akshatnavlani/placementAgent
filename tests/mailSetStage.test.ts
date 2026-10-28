@@ -26,6 +26,7 @@ function memoryDb(status: DriveStatus | null) {
     alerted_at: null,
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
   };
   const db = {
     from(table: string) {
@@ -55,14 +56,14 @@ function memoryDb(status: DriveStatus | null) {
 }
 
 describe("setMailStage", () => {
-  it("allows Applied → Assessment", async () => {
+  it("allows Applied ? Assessment", async () => {
     const { db, row } = memoryDb("Applied");
     const r = await setMailStage(db, "drive-1", "Assessment");
     expect(r).toEqual({ ok: true, from: "Applied" });
     expect(row.status).toBe("Assessment");
   });
 
-  it("allows Assessment → Interview → Accepted", async () => {
+  it("allows Assessment ? Interview ? Accepted", async () => {
     const { db, row } = memoryDb("Assessment");
     expect(await setMailStage(db, "drive-1", "Interview")).toMatchObject({ ok: true });
     expect(row.status).toBe("Interview");
@@ -70,7 +71,7 @@ describe("setMailStage", () => {
     expect(row.status).toBe("Accepted");
   });
 
-  it("rejects regress Interview → Assessment", async () => {
+  it("rejects regress Interview ? Assessment", async () => {
     const { db, row } = memoryDb("Interview");
     const r = await setMailStage(db, "drive-1", "Assessment");
     expect(r).toEqual({ ok: false, reason: "regress_or_same" });
@@ -97,7 +98,7 @@ describe("setMailStage", () => {
     expect(r).toEqual({ ok: false, reason: "not_applied_yet" });
   });
 
-  it("blocks Accepted → Rejected", async () => {
+  it("blocks Accepted ? Rejected", async () => {
     const { db } = memoryDb("Accepted");
     const r = await setMailStage(db, "drive-1", "Rejected");
     expect(r).toEqual({ ok: false, reason: "cannot_reject" });

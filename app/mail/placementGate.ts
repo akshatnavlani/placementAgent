@@ -69,6 +69,13 @@ export function isActionableMailClassification(
   if (result.classification === "unresolved") {
     return false;
   }
+  // Incomplete shortlists: ask the user (do not auto-reject).
+  if (
+    result.classification === "shortlist_absent" &&
+    result.listComplete !== true
+  ) {
+    return true;
+  }
   if (result.confidence !== "high") {
     return false;
   }

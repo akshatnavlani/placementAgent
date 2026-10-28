@@ -36,6 +36,7 @@ function drive(): DriveRow {
     alerted_at: null,
     applied_at: null,
     last_apply_check_at: null,
+    last_rejection_ask_at: null,
   };
 }
 
@@ -103,7 +104,8 @@ describe("applyClassification notify idempotency", () => {
     );
     expect(first.notified).toBe(true);
     expect(sendMessage).toHaveBeenCalledTimes(1);
-    const text = String(sendMessage.mock.calls[0]?.[1] ?? "");
+    const firstCall = sendMessage.mock.calls[0] as unknown as [string, string] | undefined;
+    const text = String(firstCall?.[1] ?? "");
     expect(text).toContain("Subject: Interview");
     expect(text).toContain("Acme");
 
@@ -146,7 +148,8 @@ describe("applyClassification notify idempotency", () => {
     );
     expect(result.notified).toBe(true);
     expect(result.reason).toBe("no_drive_match_notified");
-    const text = String(sendMessage.mock.calls[0]?.[1] ?? "");
+    const call = sendMessage.mock.calls[0] as unknown as [string, string] | undefined;
+    const text = String(call?.[1] ?? "");
     expect(text).toContain("Reschedule noted");
     expect(text).toContain("Zensar");
   });

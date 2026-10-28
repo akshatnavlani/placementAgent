@@ -11,9 +11,24 @@ export type PlacementOutcome<T> =
   | { kind: "unavailable"; status: 502 | 503 | 504 }
   | { kind: "timeout" }
   | { kind: "network"; message: string }
-  | { kind: "http"; status: number }
+  | { kind: "http"; status: number; message?: string }
   | { kind: "invalid"; reason: string }
   | { kind: "noToken"; profile: Record<string, unknown> };
+
+/** Pull a short human message from placement error JSON when present. */
+export function extractPlacementErrorMessage(json: unknown): string | undefined {
+  if (!json || typeof json !== "object" || Array.isArray(json)) {
+    return undefined;
+  }
+  const obj = json as Record<string, unknown>;
+  for (const key of ["message", "error", "detail", "msg"]) {
+    const v = obj[key];
+    if (typeof v === "string" && v.trim()) {
+      return v.trim();
+    }
+  }
+  return undefined;
+}
 
 export type PlacementLogger = {
   info: (obj: Record<string, unknown>, msg?: string) => void;
@@ -284,7 +299,7 @@ export class PlacementClient {
 
     if (status < 200 || status >= 300) {
       this.logOutcome(route, status, durationMs, "http");
-      return { kind: "http", status };
+      return { kind: "http", status, message: extractPlacementErrorMessage(json) };
     }
 
     this.logOutcome(route, status, durationMs, "ok");
