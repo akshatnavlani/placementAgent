@@ -69,22 +69,38 @@ function mergeAnswers(
   return [...byNorm.values()];
 }
 
-/** Exported for tests — keys only by field id (or label when id missing). */
+/** Platform apply payload item — must match getApplicationDetails shape. */
+export type CustomFieldResponseItem = {
+  fieldId: string;
+  fieldLabel: string;
+  fieldType: string;
+  response: string;
+};
+
+/**
+ * Build `customFieldResponses` as an array of `{ fieldId, fieldLabel, fieldType, response }`.
+ * A plain object keyed by field id is accepted by validation but the server then 500s.
+ */
 export function buildCustomFieldResponses(
   fields: CustomField[],
   answers: Array<{ label: string; value: string }>,
-): Record<string, string> {
+): CustomFieldResponseItem[] {
   const byNorm = new Map(
     answers.map((a) => [normalizeAnswerLabel(a.label), a.value] as const),
   );
-  const out: Record<string, string> = {};
+  const out: CustomFieldResponseItem[] = [];
   for (const field of fields) {
     const value = byNorm.get(normalizeAnswerLabel(field.label));
     if (value === undefined) {
       continue;
     }
-    const key = field.id?.trim() || field.label;
-    out[key] = value;
+    const fieldId = field.id?.trim() || field.label;
+    out.push({
+      fieldId,
+      fieldLabel: field.label,
+      fieldType: field.type?.trim() || "text",
+      response: value,
+    });
   }
   return out;
 }
@@ -214,7 +230,12 @@ export async function submitApplication(deps: SubmitDeps, driveId: string): Prom
 
   const customFieldResponses = buildCustomFieldResponses(fields, answers);
   deps.log?.info?.(
-    { driveId, responseKeys: Object.keys(customFieldResponses), fieldCount: fields.length },
+    {
+      driveId,
+      responseCount: customFieldResponses.length,
+      fieldIds: customFieldResponses.map((r) => r.fieldId),
+      fieldCount: fields.length,
+    },
     "apply customFieldResponses",
   );
   const applied = await deps.placement.applyToEvent(secret.bearerToken, {
@@ -231,7 +252,7 @@ export async function submitApplication(deps: SubmitDeps, driveId: string): Prom
         driveId,
         status: applied.status,
         message: applied.message,
-        responseKeys: Object.keys(customFieldResponses),
+        fieldIds: customFieldResponses.map((r) => r.fieldId),
       },
       "apply http error",
     );

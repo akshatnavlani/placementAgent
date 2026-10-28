@@ -468,7 +468,16 @@ export class PlacementClient {
       eventID: string;
       eventName: string;
       companyUsername: string;
-      customFieldResponses: Record<string, string>;
+      /**
+       * Must be an array of `{ fieldId, fieldLabel, fieldType, response }`.
+       * Object maps keyed by field id validate then 500 on the live API.
+       */
+      customFieldResponses: Array<{
+        fieldId: string;
+        fieldLabel: string;
+        fieldType: string;
+        response: string;
+      }>;
     },
   ): Promise<PlacementOutcome<{ status: number; message?: string }>> {
     return this.enqueue(async () => {

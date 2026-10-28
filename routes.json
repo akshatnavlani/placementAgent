@@ -451,7 +451,7 @@
           "eventName": "string",
           "fullName": "student name",
           "studentID": "SRN",
-          "customFieldResponses": "answers for that event's extra questions. The form builds this object; it has no fixed keys in the client."
+          "customFieldResponses": "array of { fieldId, fieldLabel, fieldType, response }. A plain object keyed by field id validates then HTTP 500s on the live API."
         }
       },
       "output": {

@@ -9,19 +9,18 @@ const fields: CustomField[] = [
 ];
 
 describe("buildCustomFieldResponses", () => {
-  it("keys only by field id (or label when id null)", () => {
+  it("returns array items with fieldId/fieldLabel/fieldType/response", () => {
     const out = buildCustomFieldResponses(fields, [
       { label: "Why us?", value: "culture" },
       { label: "City", value: "BLR" },
       { label: "Notes", value: "hi" },
       { label: "Orphan leftover", value: "should-not-appear" },
     ]);
-    expect(out).toEqual({
-      field_1: "culture",
-      field_2: "BLR",
-      Notes: "hi",
-    });
-    expect(out["Orphan leftover"]).toBeUndefined();
+    expect(out).toEqual([
+      { fieldId: "field_1", fieldLabel: "Why us?", fieldType: "text", response: "culture" },
+      { fieldId: "field_2", fieldLabel: "City", fieldType: "dropdown", response: "BLR" },
+      { fieldId: "Notes", fieldLabel: "Notes", fieldType: "text", response: "hi" },
+    ]);
   });
 });
 
