@@ -1,4 +1,4 @@
-export const POLL_INTERVAL_MS = 5 * 60 * 1000;
+export const POLL_INTERVAL_MS = 15 * 60 * 1000;
 
 export type PollSchedulerDeps = {
   /** Run one poll cycle. */

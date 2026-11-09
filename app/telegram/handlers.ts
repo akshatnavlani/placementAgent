@@ -100,7 +100,7 @@ export function formatHelpReply(): string {
     "Commands:",
     "/help — this list",
     "/poll — pull eligible drives + mail now",
-    "/pollreports — poll summary status (in-process every 5 min)",
+    "/pollreports — poll summary status (in-process every 15 min)",
     "/pollreports on|off — enable or pause scheduled summaries",
     "/profile — onboarding / resume menu",
     "/profile redo — restart profile wizard",
@@ -626,13 +626,13 @@ export async function handleTelegramUpdate(
       const lastCron = await getLastCronAt(deps.db).catch(() => null);
       const lastCronLine = lastCron
         ? `Last scheduled poll: ${lastCron}`
-        : "Last scheduled poll: never (in-process 5-min scheduler + optional /cron/poll).";
+        : "Last scheduled poll: never (in-process 15-min scheduler).";
       if (pollReportsCmd.kind === "set") {
         await setPollReportsEnabled(deps.db, pollReportsCmd.enabled);
         await deps.telegram.sendMessage(
           deps.allowedChatId,
           pollReportsCmd.enabled
-            ? `Poll reports on — summaries arrive after each scheduled poll (~5 min), not from manual /poll.\n${lastCronLine}`
+            ? `Poll reports on — summaries arrive after each scheduled poll (~15 min), not from manual /poll.\n${lastCronLine}`
             : "Poll reports off — scheduled summaries paused. Manual /poll still replies.",
         );
         return { handled: true, reason: pollReportsCmd.enabled ? "pollreports_on" : "pollreports_off" };

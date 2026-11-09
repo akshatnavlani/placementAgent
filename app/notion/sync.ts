@@ -1,5 +1,5 @@
 import type { DbClient } from "../db/client.ts";
-import { getDrive, listDrives, setNotionPageId, type DriveRow } from "../db/drive.ts";
+import { getDrive, listDrivesLite, setNotionPageId, type DriveRow } from "../db/drive.ts";
 import type { TelegramClient } from "../telegram/client.ts";
 import { NotionClient, type NotionLogger } from "./client.ts";
 import {
@@ -155,6 +155,8 @@ export type SyncEligibleDeps = SyncDriveDeps & {
   candidateIds: string[];
   /** Drive ids just marked Not Applied. */
   notAppliedIds: string[];
+  /** Poll snapshot — skip a second drive list when provided. */
+  drives?: DriveRow[];
 };
 
 export type SyncEligibleSummary = {
@@ -180,7 +182,7 @@ export async function syncEligibleDrives(deps: SyncEligibleDeps): Promise<SyncEl
     }
   }
 
-  const all = await listDrives(deps.db);
+  const all = deps.drives ?? (await listDrivesLite(deps.db));
   for (const row of all) {
     if (row.is_eligible === true && row.status === "New" && !row.notion_page_id) {
       queue.push(row.id);

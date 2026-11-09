@@ -1,5 +1,5 @@
 import type { DbClient } from "../db/client.ts";
-import { addReminderTiersSent, listDrives, type DriveRow } from "../db/drive.ts";
+import { addReminderTiersSent, getDrive, listDrivesLite, type DriveRow } from "../db/drive.ts";
 import { driveActionKeyboard } from "../telegram/buttons.ts";
 import type { TelegramClient } from "../telegram/client.ts";
 import { formatDriveAlert } from "../telegram/format.ts";
@@ -28,7 +28,7 @@ export async function sendDeadlineReminders(deps: {
   const now = deps.now ?? new Date();
   const alerts: string[] = [];
   let reminded = 0;
-  const rows = deps.listExisting ? await deps.listExisting() : await listDrives(deps.db);
+  const rows = deps.listExisting ? await deps.listExisting() : await listDrivesLite(deps.db);
 
   for (const row of rows) {
     if (row.status !== "New" || !row.deadline) {
@@ -40,7 +40,9 @@ export async function sendDeadlineReminders(deps: {
     }
     // Fire the tightest due tier only (largest index = smallest window).
     const tierId = due[due.length - 1] as ReminderTierId;
-    const text = formatDriveAlert(row, {
+    // Lite snapshot omits raw_*; load full row only when we are about to send.
+    const full = (await getDrive(deps.db, row.id)) ?? row;
+    const text = formatDriveAlert(full, {
       urgent: true,
       urgentLabel: tierLabel(tierId),
     });

@@ -493,4 +493,98 @@ describe("runPoll", () => {
     expect(second.notionSynced).toBe(0);
     expect(notionFetch.mock.calls.length).toBe(notionCallsAfterInsert);
   });
+
+  it("loads listExisting once and reuses that snapshot for downstream passes", async () => {
+    const now = new Date("2026-01-02T12:00:00.000Z");
+    const event = structuredClone(listFixture.events[0]!);
+    event._id = "snap-1";
+    event.updatedAt = "2026-01-01T00:00:00.000Z";
+    event.deadline = new Date(now.getTime() + 25 * 60 * 1000).toISOString();
+    event.isEligible = true;
+    const seed: DriveRow[] = [
+      {
+        id: "snap-1",
+        raw_list: event as Record<string, unknown>,
+        raw_detail: { companyName: "SnapCo" },
+        updated_at_platform: String(event.updatedAt),
+        is_eligible: true,
+        deadline: String(event.deadline),
+        status: "New",
+        reminder_sent: false,
+        reminder_tiers_sent: [],
+        draft_status: null,
+        notion_page_id: null,
+        pdf_urls: [],
+        pdf_text: {},
+        company_id: null,
+        company_name: "SnapCo",
+        company_username: null,
+        event_name: "Intern",
+        first_seen_at: "2026-01-01T00:00:00.000Z",
+        last_seen_at: "2026-01-01T00:00:00.000Z",
+        alerted_at: "2026-01-01T00:00:00.000Z",
+        applied_at: null,
+        last_apply_check_at: null,
+        last_rejection_ask_at: null,
+      },
+    ];
+    const { db, rows } = memoryStore(seed);
+    let listExistingCalls = 0;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("getEventsByStudentEligibility")) {
+        return new Response(JSON.stringify({ success: true, events: [event] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("getAppliedEvents")) {
+        return new Response(JSON.stringify({ success: true, data: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("checkApplyStatus")) {
+        return new Response(JSON.stringify({ success: true, applied: false }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("no", { status: 404 });
+    });
+    const telegram = {
+      sendMessage: vi.fn(async () => ({ ok: true as const })),
+    };
+    const placement = new PlacementClient({ fetch: fetchMock as unknown as typeof fetch });
+    const config = {
+      ...baseConfig,
+      TELEGRAM_BOT_TOKEN: "telegram-test-token",
+      TELEGRAM_ALLOWED_CHAT_ID: "1",
+      TELEGRAM_WEBHOOK_SECRET: "telegram-webhook-secret-0123456789ab",
+    } as Config;
+
+    const result = await runPoll({
+      config,
+      db,
+      placement,
+      telegram: telegram as never,
+      fetch: fetchMock as unknown as typeof fetch,
+      listExisting: async () => {
+        listExistingCalls += 1;
+        return [...rows.values()];
+      },
+      notify: false,
+      notionSync: false,
+      mailSync: false,
+      reminders: true,
+      dailyApply: true,
+      reconcileApplied: true,
+      now,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(listExistingCalls).toBe(1);
+    expect(result.reminded).toBeGreaterThanOrEqual(1);
+    expect(telegram.sendMessage).toHaveBeenCalled();
+  });
 });

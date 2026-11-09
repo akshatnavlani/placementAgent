@@ -13,7 +13,8 @@ import {
 import { createDbClient, type DbClient } from "../db/client.ts";
 import {
   getDrive,
-  listDrives,
+  getDrivePdfState,
+  listDrivesLite,
   markNotApplied,
   setDetail,
   setPdfText,
@@ -264,7 +265,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
     return emptySummary({ ok: false, alert: list.kind, alerts });
   }
 
-  const existing = deps.listExisting ? await deps.listExisting(db) : await listDrives(db);
+  const existing = deps.listExisting ? await deps.listExisting(db) : await listDrivesLite(db);
   const existingById = new Map(existing.map((row) => [row.id, row]));
   const { actions, alerts: diffAlerts } = diffCatalog(list.data.events, existing, now);
   alerts.push(...diffAlerts);
@@ -380,11 +381,19 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       }
     }
 
-    const priorText = prior?.pdf_text ?? {};
+    // Lite snapshot includes pdf_urls but omits pdf_text; load PDF columns for merge.
+    const priorPdfUrls = prior?.pdf_urls ?? [];
+    let priorText = prior?.pdf_text ?? {};
+    if (prior && Object.keys(priorText).length === 0) {
+      const pdfState = await getDrivePdfState(db, action.id);
+      if (pdfState) {
+        priorText = pdfState.pdf_text;
+      }
+    }
     const pdfResult = await ensurePdfs(action.id, urls, priorText, fetchImpl, log);
     alerts.push(...pdfResult.alerts);
     pdfsFetched += pdfResult.fetched;
-    if (pdfResult.fetched > 0 || urls.join("\0") !== (prior?.pdf_urls ?? []).join("\0")) {
+    if (pdfResult.fetched > 0 || urls.join("\0") !== priorPdfUrls.join("\0")) {
       await setPdfText(db, action.id, urls, pdfResult.pdfText, now);
     }
 
@@ -394,6 +403,63 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
   await touchLastSeen(db, touchIds, now);
   await markNotApplied(db, notAppliedIds, now);
   notApplied = notAppliedIds.length;
+
+  // Keep the in-memory lite snapshot aligned with catalog writes for downstream passes.
+  for (const id of notAppliedIds) {
+    const row = existingById.get(id);
+    if (row) {
+      row.status = "Not Applied";
+    }
+  }
+  for (const action of notifyCandidates) {
+    if (!action.event) {
+      continue;
+    }
+    const display = eventDisplayFields(action.event);
+    const priorRow = existingById.get(action.id);
+    if (!priorRow) {
+      const stub: DriveRow = {
+        id: action.id,
+        raw_list: {},
+        raw_detail: null,
+        updated_at_platform: display.updatedAtPlatform,
+        is_eligible: action.isEligible,
+        deadline: display.deadline,
+        status: action.statusOnInsert,
+        reminder_sent: false,
+        reminder_tiers_sent: [],
+        draft_status: null,
+        notion_page_id: null,
+        pdf_urls: extractPdfUrls(action.event),
+        pdf_text: {},
+        company_id: display.companyId,
+        company_name: display.companyName,
+        company_username: display.companyUsername,
+        event_name: display.eventName,
+        first_seen_at: now.toISOString(),
+        last_seen_at: now.toISOString(),
+        alerted_at: null,
+        applied_at: null,
+        last_apply_check_at: null,
+        last_rejection_ask_at: null,
+      };
+      existing.push(stub);
+      existingById.set(action.id, stub);
+      continue;
+    }
+    priorRow.is_eligible = action.isEligible;
+    priorRow.deadline = display.deadline;
+    priorRow.updated_at_platform = display.updatedAtPlatform;
+    priorRow.company_id = display.companyId;
+    priorRow.company_name = display.companyName;
+    priorRow.company_username = display.companyUsername;
+    priorRow.event_name = display.eventName;
+    priorRow.pdf_urls = extractPdfUrls(action.event);
+    priorRow.last_seen_at = now.toISOString();
+    if (action.setStatusNewIfNull && priorRow.status === null && action.isEligible === true) {
+      priorRow.status = "New";
+    }
+  }
 
   const wantNotify = deps.notify !== false;
   if (wantNotify && notifyCandidates.length > 0) {
@@ -449,6 +515,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
         telegram: telegramClient,
         chatId: tg.chatId,
         now,
+        listExisting: async () => existing,
       });
       reminded = reminderResult.reminded;
       alerts.push(...reminderResult.alerts);
@@ -476,6 +543,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       fetch: fetchImpl,
       log,
       now,
+      listNew: async () => existing.filter((row) => row.status === "New"),
     });
     applyChecked = daily.applyChecked;
     markedApplied = daily.markedApplied;
@@ -492,6 +560,11 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
       fetch: fetchImpl,
       log,
       now,
+      listActive: async () =>
+        existing.filter(
+          (row) =>
+            row.status === "Applied" || row.status === "Assessment" || row.status === "Interview",
+        ),
     });
     rejectAsked = reconciled.asked;
     alerts.push(...reconciled.alerts);
@@ -530,6 +603,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
         chatId: tgChatId,
         candidateIds: notifyCandidates.map((a) => a.id),
         notAppliedIds,
+        drives: existing,
       });
       notionSynced = notionResult.synced;
       alerts.push(...notionResult.alerts);
@@ -549,6 +623,7 @@ export async function runPoll(deps: RunPollDeps): Promise<PollSummary> {
         telegram: telegramClient,
         notion: deps.notion,
         notify: deps.notify !== false,
+        drives: existing,
       });
       mailProcessed = mailResult.processed;
       mailNotified = mailResult.notified;

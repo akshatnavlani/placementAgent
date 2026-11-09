@@ -1,6 +1,6 @@
 import { loadConfig } from "./config.ts";
 import { executeCronPoll } from "./poll/executeCronPoll.ts";
-import { startPollScheduler } from "./poll/scheduler.ts";
+import { POLL_INTERVAL_MS, startPollScheduler } from "./poll/scheduler.ts";
 import { buildServer } from "./server.ts";
 
 const config = loadConfig();
@@ -32,4 +32,4 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
 }
 
 await app.listen({ host: config.HOST, port: config.PORT });
-app.log.info({ intervalMs: 5 * 60 * 1000 }, "in-process poll scheduler started");
+app.log.info({ intervalMs: POLL_INTERVAL_MS }, "in-process poll scheduler started");

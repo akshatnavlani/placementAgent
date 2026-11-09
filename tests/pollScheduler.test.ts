@@ -7,8 +7,8 @@ import {
 
 describe("nextPollFireAt", () => {
   it("adds interval from fire time", () => {
-    expect(nextPollFireAt(1_000_000, 300_000)).toBe(1_300_000);
-    expect(POLL_INTERVAL_MS).toBe(300_000);
+    expect(nextPollFireAt(1_000_000, 900_000)).toBe(1_900_000);
+    expect(POLL_INTERVAL_MS).toBe(900_000);
   });
 });
 

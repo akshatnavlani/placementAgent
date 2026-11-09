@@ -1,7 +1,7 @@
 import type { Config } from "../config.ts";
 import { hasTelegram, requireTelegram } from "../config.ts";
 import type { DbClient } from "../db/client.ts";
-import { listDrives } from "../db/drive.ts";
+import { listDrivesLite, type DriveRow } from "../db/drive.ts";
 import {
   classificationRank,
   classifyRecruitmentMail,
@@ -50,6 +50,8 @@ export type SyncRecruitmentMailDeps = {
   mailboxes?: Array<{ account: MailAccount; client: GmailClient }>;
   /** When false, skip Telegram even if configured. */
   notify?: boolean;
+  /** Poll snapshot — skip a second drive list when provided. */
+  drives?: DriveRow[];
 };
 
 export type MailSyncSummary = {
@@ -91,7 +93,7 @@ async function processMessage(
   client: GmailClient,
   messageId: string,
   studentTokens: string[],
-  drives: Awaited<ReturnType<typeof listDrives>>,
+  drives: DriveRow[],
   summary: MailSyncSummary,
   now: Date,
 ): Promise<void> {
@@ -226,7 +228,7 @@ async function syncOneMailbox(
   account: MailAccount,
   client: GmailClient,
   studentTokens: string[],
-  drives: Awaited<ReturnType<typeof listDrives>>,
+  drives: DriveRow[],
   summary: MailSyncSummary,
   now: Date,
 ): Promise<void> {
@@ -359,7 +361,7 @@ export async function syncRecruitmentMail(
 
   const profile = await loadPlatformProfile(deps.db);
   const studentTokens = profile ? nameTokensFromProfile(profile.platform) : [];
-  const drives = await listDrives(deps.db);
+  const drives = deps.drives ?? (await listDrivesLite(deps.db));
 
   const runDeps: SyncRecruitmentMailDeps = { ...deps, telegram, now };
 

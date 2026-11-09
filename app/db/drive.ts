@@ -75,6 +75,16 @@ function asPdfText(value: unknown): Record<string, string> {
   return out;
 }
 
+/** Poll/list columns — omit raw_list, raw_detail, pdf_text (egress hot path). */
+export const DRIVE_LIST_COLUMNS =
+  "id,updated_at_platform,is_eligible,deadline,status,reminder_sent,reminder_tiers_sent,draft_status,notion_page_id,pdf_urls,company_id,company_name,company_username,event_name,first_seen_at,last_seen_at,alerted_at,applied_at,last_apply_check_at,last_rejection_ask_at";
+
+const DRIVE_UPSERT_EXISTING_COLUMNS = "id,status";
+
+const DRIVE_PDF_COLUMNS = "id,pdf_urls,pdf_text";
+
+const DRIVE_REMINDER_COLUMNS = "id,reminder_tiers_sent";
+
 function mapRow(row: Record<string, unknown>): DriveRow {
   return {
     id: String(row.id),
@@ -94,8 +104,8 @@ function mapRow(row: Record<string, unknown>): DriveRow {
     company_name: (row.company_name as string | null) ?? null,
     company_username: (row.company_username as string | null) ?? null,
     event_name: (row.event_name as string | null) ?? null,
-    first_seen_at: String(row.first_seen_at),
-    last_seen_at: String(row.last_seen_at),
+    first_seen_at: String(row.first_seen_at ?? ""),
+    last_seen_at: String(row.last_seen_at ?? ""),
     alerted_at: (row.alerted_at as string | null) ?? null,
     applied_at: (row.applied_at as string | null) ?? null,
     last_apply_check_at: (row.last_apply_check_at as string | null) ?? null,
@@ -103,10 +113,20 @@ function mapRow(row: Record<string, unknown>): DriveRow {
   };
 }
 
+/** Full-row list (blobs included). Prefer listDrivesLite on the poll hot path. */
 export async function listDrives(db: DbClient): Promise<DriveRow[]> {
   const { data, error } = await db.from("drive").select("*");
   if (error) {
     throw new Error(`drive list failed: ${error.message}`);
+  }
+  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}
+
+/** Light list for poll/mail — no raw_list / raw_detail / pdf_text. */
+export async function listDrivesLite(db: DbClient): Promise<DriveRow[]> {
+  const { data, error } = await db.from("drive").select(DRIVE_LIST_COLUMNS);
+  if (error) {
+    throw new Error(`drive list lite failed: ${error.message}`);
   }
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
@@ -119,8 +139,37 @@ export async function getDrive(db: DbClient, id: string): Promise<DriveRow | nul
   return data ? mapRow(data as Record<string, unknown>) : null;
 }
 
+/** PDF merge prior state without loading raw_list / raw_detail. */
+export async function getDrivePdfState(
+  db: DbClient,
+  id: string,
+): Promise<{ pdf_urls: string[]; pdf_text: Record<string, string> } | null> {
+  const { data, error } = await db.from("drive").select(DRIVE_PDF_COLUMNS).eq("id", id).maybeSingle();
+  if (error) {
+    throw new Error(`drive get pdf state failed: ${error.message}`);
+  }
+  if (!data) {
+    return null;
+  }
+  const row = data as Record<string, unknown>;
+  return {
+    pdf_urls: asStringArray(row.pdf_urls),
+    pdf_text: asPdfText(row.pdf_text),
+  };
+}
+
 export async function upsertFromList(db: DbClient, fields: DriveUpsertFields, now: Date = new Date()): Promise<void> {
-  const existing = await getDrive(db, fields.id);
+  const { data: existingRaw, error: existingError } = await db
+    .from("drive")
+    .select(DRIVE_UPSERT_EXISTING_COLUMNS)
+    .eq("id", fields.id)
+    .maybeSingle();
+  if (existingError) {
+    throw new Error(`drive upsert lookup failed: ${existingError.message}`);
+  }
+  const existing = existingRaw
+    ? { status: (existingRaw as Record<string, unknown>).status as DriveStatus | null }
+    : null;
   const iso = now.toISOString();
 
   if (!existing) {
@@ -284,8 +333,16 @@ export async function addReminderTiersSent(
   if (tiers.length === 0) {
     return;
   }
-  const row = await getDrive(db, id);
-  const merged = [...new Set([...(row?.reminder_tiers_sent ?? []), ...tiers])];
+  const { data, error: readError } = await db
+    .from("drive")
+    .select(DRIVE_REMINDER_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) {
+    throw new Error(`drive addReminderTiersSent read failed: ${readError.message}`);
+  }
+  const prior = parseReminderTiers((data as Record<string, unknown> | null)?.reminder_tiers_sent);
+  const merged = [...new Set([...prior, ...tiers])];
   const iso = now.toISOString();
   const { error } = await db
     .from("drive")
@@ -316,7 +373,7 @@ export async function setNotionPageId(
 }
 
 export async function listNewDrives(db: DbClient): Promise<DriveRow[]> {
-  const all = await listDrives(db);
+  const all = await listDrivesLite(db);
   return all.filter((row) => row.status === "New");
 }
 
@@ -433,7 +490,7 @@ export async function markRejectionAsked(
 
 /** Applied / Assessment / Interview cards — candidates for applied-list reconciliation. */
 export async function listActiveAppliedDrives(db: DbClient): Promise<DriveRow[]> {
-  const all = await listDrives(db);
+  const all = await listDrivesLite(db);
   return all.filter(
     (row) => row.status === "Applied" || row.status === "Assessment" || row.status === "Interview",
   );
